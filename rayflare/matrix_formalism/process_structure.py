@@ -75,7 +75,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
 
-            if struct.method == "RT_TMM":
+            if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
                 logger.info(f"Making RT/TMM lookuptable for element {i1} in structure")
                 if i1 == 0:  # top interface
                     incidence = SC.incidence
@@ -187,8 +187,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         overwrite=overwrite,
                     )
 
-            if struct.method == "RT_TMM":
+            if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
                 logger.info(f"Ray tracing with TMM lookup table for element {i1} in structure")
+
+                analytical_approx = False
+                if struct.method == "RT_analytical_TMM":
+                    analytical_approx = True
 
                 prof = struct.prof_layers
                 n_abs_layers = len(struct.layers)
@@ -214,11 +218,15 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         layer_widths[i1],
                         save=True,
                         overwrite=overwrite,
+                        analytical_approx = analytical_approx
                     )
 
-            if struct.method == "RT_Fresnel":
+            if struct.method == "RT_Fresnel" or struct.method == "RT_analytical_Fresnel":
                 logger.info(f"Ray tracing with Fresnel equations for element {i1} in structure")
 
+                analytical_approx = False
+                if struct.method == "RT_analytical_TMM":
+                    analytical_approx = True
                 group = RTgroup(textures=[struct.texture])
                 for side in which_sides:
                     only_incidence_angle = determine_only_incidence(
@@ -239,6 +247,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         only_incidence_angle=only_incidence_angle,
                         save=True,
                         overwrite=overwrite,
+                        analytical_approx = analytical_approx
                     )
 
             if struct.method == "RCWA":

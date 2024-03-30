@@ -1,3 +1,8 @@
+import sys
+import os
+sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
+
 from solcore.structure import Layer
 from solcore import material
 import numpy as np

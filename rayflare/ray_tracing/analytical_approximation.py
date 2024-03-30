@@ -3,6 +3,152 @@ import xarray as xr
 import os
 from rayflare.utilities import get_savepath
 
+# to do
+# analytical_front_surface - input is a bunch of rays, in optics it's  called initial_ray
+# output is another list, just like in optics
+# should change to analytical_scatter
+# but now what if ray points up and scatters off underside?
+# analytical_scatter must specify whether ray is coming down, or going up
+# for an interlayer, there is both reflected rays and transmitted that need to be kept track
+# 
+
+# this class describes a ray's / rays' polarization as well as intensity
+# Each ray is composed of two perpendicular polarization components, represented by the s_vector and p_vector
+# They are called s,p for convenience: if ray is created from an interaction with an interface, then the s_vector 
+# is perpendicular to the plane of incidence, and p_vector is parallel to the plane of incidence
+# but in general, s_vector and p_vector can be arbitrary directions as long as they are perpendicular to each other and 
+# perpendicular to the ray's direction of travel.  
+# The lengths of the s_vector, p_vector represent the amplitude of the E field of their respective light
+# Therefore (s_vector length)^2 + (p_vector length)^2 = ray intensity
+# If s_vector length = p_vector length, the ray is unpolarized
+# If one of s_vector, p_vector has zero length, then ray is linearly polarized
+# If s_vector, p_vector have nonzero but different length, then ray is neither completely polarized or completely unpolarized
+# Elliptical or circular polarization is not represented
+# If s_vector, p_vector have shape (3,), then the instance is one ray
+# if s_vector, p_vector have shape (N,3), then the instance represents N rays
+class Polarization:
+    def __init__(self, s_vector, p_vector):
+        self.s_vector = s_vector
+        self.p_vector = p_vector
+    def getIntensity(self):
+        if self.s_vector.ndim==1:
+            return self.s_vector[0]**2+self.s_vector[1]**2+self.s_vector[2]**2+self.p_vector[0]**2+self.p_vector[1]**2+self.p_vector[2]**2
+        return self.s_vector[:,0]**2+self.s_vector[:,1]**2+self.s_vector[:,2]**2+self.p_vector[:,0]**2+self.p_vector[:,1]**2+self.p_vector[:,2]**2
+
+def make_arbitrary_perpendicular_direction(direction):
+    index_of_max_abs = np.argmax(np.abs(direction))
+    other_index = 0 if index_of_max_abs > 0 else 1
+    perpendicular_direction = np.copy(direction)
+    perpendicular_direction[other_index] = -direction[index_of_max_abs]
+    perpendicular_direction[index_of_max_abs] = direction[other_index]
+    return perpendicular_direction
+
+# this class additionally stores a ray's direction, as well as a lot more "metadata"
+# like probability (the probability that this ray exists), parent, etc
+# It also has propagate_R_or_T which calculates its own polarization s_vector, p_vector
+# given its parent ray, its own direction, the plane that its parent scattered off of, 
+# and the resultant Rs, Rp or Ts, Tp
+class Ray:
+    def __init__(self, direction, probability=1.0, parent=None, scatter_angle=None, scatter_plane_normal=None, is_texture_scatter=False, surf_index=0, up_or_down=-1):
+        self.direction = direction
+        self.probability = probability
+        self.scatter_angle = scatter_angle
+        self.scatter_plane_normal = scatter_plane_normal
+        self.parent = parent
+        self.transmitted_child = None
+        self.reflected_child = None
+        self.spawned_surf_index = surf_index # metadata on which surface the ray is spawned
+        self.up_or_down = up_or_down # metadata on whether the ray is point up (-1) or down (1)
+        self.polarization = None
+        self.propagated = False
+        self.num_of_texture_scatter = 0
+        self.which_interface # meta data about which interface
+        self.memorized_items = []
+        if parent is None: # first initial ray, then just make circular polarized
+            self.propagated = True
+            s_vector = make_arbitrary_perpendicular_direction(direction)
+            p_vector = np.cross(direction, s_vector)
+            length_ = np.linalg.norm(s_vector)
+            s_vector /= (length_*np.sqrt(2.0))
+            length_ = np.linalg.norm(p_vector)
+            p_vector /= (length_*np.sqrt(2.0))
+            self.polarization = Polarization(s_vector, p_vector)
+        if parent:
+            self.probability = self.probability*parent.probability
+            self.num_of_texture_scatter = parent.num_of_texture_scatter
+            if is_texture_scatter:
+                self.num_of_texture_scatter += 1
+
+    def turn_into_initial_ray(self):
+        self.scatter_angle = None
+        self.parent = None
+        self.scatter_plane_normal=None
+        self.propagated = True
+        self.num_of_texture_scatter = 0
+
+    def getIntensity(self):
+        return self.probability*self.polarization.getIntensity()
+
+    def point_down(self):
+        if self.direction[2] > 0:
+            self.direction[2] *= -1.0
+            self.polarization.s_vector[2] *= -1.0
+            self.polarization.p_vector[2] *= -1.0
+    
+    def propagate_R_or_T(self, R_or_T_s, R_or_T_p):
+        assert(self.parent is not None and self.parent.propagated == True)
+        self.propagated = True
+        parent_s_vector = self.parent.polarization.s_vector
+        parent_p_vector = self.parent.polarization.p_vector
+        if len(self.memorized_items)==0:
+            parent_direction = self.parent.direction
+            new_s_direction = np.cross(parent_direction, self.scatter_plane_normal)
+            length_ = np.linalg.norm(new_s_direction)
+            if length_ == 0: # which could happen if parent_direction, self.reflection_plane_normal are parallel
+                # then just make an arbitrary direction which is perpendicular to parent_direction
+                new_s_direction = make_arbitrary_perpendicular_direction(parent_direction)
+            else:
+                new_s_direction /= length_
+            new_p_direction = np.cross(self.direction, new_s_direction)
+            new_p_direction /= np.linalg.norm(new_p_direction)
+            old_p_direction = np.cross(parent_direction, new_s_direction)
+            old_p_direction /= np.linalg.norm(old_p_direction)
+            self.memorized_items.append(new_s_direction)
+            self.memorized_items.append(old_p_direction)
+            self.memorized_items.append(new_p_direction)
+        else:
+            new_s_direction = self.memorized_items[0]
+            old_p_direction = self.memorized_items[1]
+            new_p_direction = self.memorized_items[2]
+
+        s_component = np.array([np.dot(parent_s_vector, new_s_direction), np.dot(parent_p_vector, new_s_direction)])
+        if np.ndim(s_component) == 1:
+            s_component = s_component.reshape(1,-1)
+        else:
+            s_component = s_component.T
+        s_component = np.sqrt(s_component[:,0]**2+s_component[:,1]**2) 
+        s_component = s_component*np.sqrt(R_or_T_s) # R_s can be a vector of many wavelengths
+        p_component = np.array([np.dot(parent_s_vector, old_p_direction), np.dot(parent_p_vector, old_p_direction)])
+        if np.ndim(p_component) == 1:
+            p_component = p_component.reshape(1,-1)
+        else:
+            p_component = p_component.T
+        p_component = np.sqrt(p_component[:,0]**2+p_component[:,1]**2) 
+        p_component = p_component*np.sqrt(R_or_T_p) # R_p can be a vector of many wavelengths
+        s_vector = np.outer(s_component, new_s_direction) 
+        p_vector = np.outer(p_component, new_p_direction)
+        self.polarization = Polarization(s_vector, p_vector)
+
+def get_ray_directions(ray_queue):
+    directions = []
+    for i, ray in enumerate(ray_queue):
+        if i == 0:
+            directions = ray.direction.reshape(1, -1)
+        else:
+            directions = np.vstack((directions, ray.direction.reshape(1, -1)))
+    return directions
+
+
 theta_lamb = np.linspace(0, 0.999 * np.pi / 2, 100)
 def traverse_vectorised(width, theta, alpha, I_i, positions, I_thresh, direction):
 
@@ -84,7 +230,7 @@ def calc_RAT_Fresnel_vec(theta, pol, *args):
 
         # Rs[np.isnan(Rs)] = 1
 
-        return Rs, [0]
+        return Rs, np.array([0]), 1-Rs
 
     if pol == "p":
         Rp = (
@@ -97,7 +243,7 @@ def calc_RAT_Fresnel_vec(theta, pol, *args):
 
         # Rp[np.isnan(Rp)] = 1
 
-        return Rp, [0]
+        return Rp, np.array([0]), 1-Rp
 
     else:
         Rs = (
@@ -129,8 +275,299 @@ def calc_RAT_TMM(theta, pol, *args):
 
     R = np.real(data["R"].data)
     A_per_layer = np.real(data["Alayer"].data)
+    T = 1 - R - np.sum(A_per_layer, axis=1)
 
-    return R, A_per_layer
+    return R, A_per_layer, T
+
+
+
+def RT_analytical(
+    i1,
+    wl,
+    n_angles,
+    nx,
+    ny,
+    widths,
+    theta_in,
+    phi_in,
+    h,
+    xs,
+    ys,
+    nks,
+    surfaces,
+    pol,
+    phi_sym,
+    theta_intv,
+    phi_intv,
+    angle_vector,
+    Fr_or_TMM,
+    n_abs_layers,
+    lookuptable,
+    calc_profile,
+    depth_spacing,
+    side,
+):
+
+    if lookuptable is not None:
+        lookuptable_wl = lookuptable.sel(wl=wl * 1e9).load()
+
+    else:
+        lookuptable_wl = None
+
+    logger.info(f"RT calculation for wavelength = {wl * 1e9} nm")
+
+    theta_out = np.zeros((n_angles, nx * ny))
+    phi_out = np.zeros((n_angles, nx * ny))
+    A_surface_layers = np.zeros((n_angles, nx * ny, n_abs_layers))
+    theta_local_incidence = np.zeros((n_angles, nx * ny))
+
+    for i2 in range(n_angles):
+
+        theta = thetas_in[i2]
+        phi = phis_in[i2]
+        r = abs((h + 1e-8) / cos(theta))
+        r_a_0 = np.real(
+            np.array(
+                [r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta)]
+            )
+        )
+        for c, vals in enumerate(product(xs, ys)):
+            _, th_o, phi_o, surface_A = single_ray_interface(
+                vals[0],
+                vals[1],
+                nks[:, i1],
+                r_a_0,
+                theta,
+                phi,
+                surfaces,
+                pol,
+                wl,
+                Fr_or_TMM,
+                lookuptable_wl,
+            )
+
+            if th_o < 0:  # can do outside loup with np.where
+                th_o = -th_o
+                phi_o = phi_o + np.pi
+            theta_out[i2, c] = th_o
+            phi_out[i2, c] = phi_o
+            A_surface_layers[i2, c] = surface_A[0]
+            theta_local_incidence[i2, c] = np.real(surface_A[1])
+
+    phi_out = fold_phi(phi_out, phi_sym)
+    phis_in = fold_phi(phis_in, phi_sym)
+
+    if side == -1:
+        not_absorbed = np.where(theta_out < (np.pi + 0.1))
+        thetas_in = np.pi - thetas_in
+        # phis_in = np.pi-phis_in # unsure about this part
+
+        theta_out[not_absorbed] = np.pi - theta_out[not_absorbed]
+        # phi_out = np.pi-phi_out # unsure about this part
+
+    theta_local_incidence = np.abs(theta_local_incidence)
+    n_thetas = len(theta_intv) - 1
+
+    if Fr_or_TMM > 0:
+        # now we need to make bins for the absorption
+        theta_intv = np.append(theta_intv, 11)
+        phi_intv = phi_intv + [np.array([0])]
+
+    # xarray: can use coordinates in calculations using apply!
+    binned_theta_in = np.digitize(thetas_in, theta_intv, right=True) - 1
+
+    binned_theta_out = np.digitize(theta_out, theta_intv, right=True) - 1
+    # -1 to give the correct index for the bins in phi_intv
+
+    phi_in = xr.DataArray(
+        phis_in,
+        coords={"theta_bin": (["angle_in"], binned_theta_in)},
+        dims=["angle_in"],
+    )
+
+    bin_in = (
+        phi_in.groupby("theta_bin")
+        .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
+        .data
+    )
+
+    phi_out = xr.DataArray(
+        phi_out,
+        coords={"theta_bin": (["angle_in", "position"], binned_theta_out)},
+        dims=["angle_in", "position"],
+    )
+
+    bin_out = (
+        phi_out.groupby("theta_bin")
+        .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
+        .data
+    )
+
+    out_mat = np.zeros((len(angle_vector), int(len(angle_vector) / 2)))
+    # everything is coming in from above so we don't need 90 -> 180 in incoming bins
+    A_mat = np.zeros((n_abs_layers, int(len(angle_vector) / 2)))
+
+    n_rays_in_bin = np.zeros(int(len(angle_vector) / 2))
+    n_rays_in_bin_abs = np.zeros(int(len(angle_vector) / 2))
+
+    binned_local_angles = np.digitize(theta_local_incidence, theta_intv, right=True) - 1
+
+    local_angle_mat = np.zeros(
+        (int((len(theta_intv) - 1) / 2), int(len(angle_vector) / 2))
+    )
+
+    if side == 1:
+        offset = 0
+    else:
+        offset = int(len(angle_vector) / 2)
+
+    for l1 in range(len(thetas_in)):
+        for l2 in range(nx * ny):
+            n_rays_in_bin[bin_in[l1] - offset] += 1
+            if binned_theta_out[l1, l2] <= (n_thetas - 1):
+                # reflected or transmitted
+                out_mat[bin_out[l1, l2], bin_in[l1] - offset] += 1
+
+            else:
+                # absorbed in one of the surface layers
+                n_rays_in_bin_abs[bin_in[l1] - offset] += 1
+                per_layer = A_surface_layers[l1, l2]
+                A_mat[:, bin_in[l1] - offset] += per_layer
+                local_angle_mat[binned_local_angles[l1, l2], bin_in[l1] - offset] += 1
+
+    # normalize
+    out_mat = np.divide(out_mat, n_rays_in_bin, where=n_rays_in_bin != 0)
+    overall_abs_frac = np.divide(
+        n_rays_in_bin_abs, n_rays_in_bin, where=n_rays_in_bin != 0
+    )
+    abs_scale = np.divide(
+        overall_abs_frac, np.sum(A_mat, 0), where=np.sum(A_mat, 0) != 0
+    )
+
+    intgr = np.divide(
+        np.sum(A_mat, 0),
+        n_rays_in_bin_abs,
+        where=n_rays_in_bin_abs != 0,
+        out=np.zeros_like(n_rays_in_bin_abs),
+    )
+    A_mat = abs_scale * A_mat
+    out_mat[np.isnan(out_mat)] = 0
+    A_mat[np.isnan(A_mat)] = 0
+
+    out_mat = COO.from_numpy(out_mat)  # sparse matrix
+    A_mat = COO.from_numpy(A_mat)
+
+    if Fr_or_TMM > 0:
+        local_angle_mat = np.divide(
+            local_angle_mat,
+            np.sum(local_angle_mat, 0),
+            where=np.sum(local_angle_mat, 0) != 0,
+            out=np.zeros_like(local_angle_mat),
+        )
+        local_angle_mat[np.isnan(local_angle_mat)] = 0
+        local_angle_mat = COO.from_numpy(local_angle_mat)
+
+        if calc_profile is not None:
+            n_a_in = int(len(angle_vector) / 2)
+            thetas = angle_vector[:n_a_in, 1]
+            unique_thetas = np.unique(thetas)
+
+            profile = make_profiles_wl(
+                unique_thetas,
+                n_a_in,
+                side,
+                widths,
+                local_angle_mat,
+                wl,
+                lookuptable_wl,
+                pol,
+                depth_spacing,
+                calc_profile,
+            )
+
+            profile = profile.rename({"dim_0": "z"})
+
+            intgr = xr.DataArray(
+                intgr,
+                dims=["global_index"],
+                coords={"global_index": np.arange(0, n_a_in)},
+            ).fillna(0)
+
+            return out_mat, A_mat, local_angle_mat, profile, intgr
+
+        else:
+            return out_mat, A_mat, local_angle_mat
+
+    else:
+        return out_mat, A_mat
+    
+
+# 2024-03-26: Johnson's implementation that uses the Ray class
+# direction = upwards (-1) or downwards (1)
+# if upwards, then make the surface normals all inverted
+def analytical_scatter(surface, surf_index, is_texture_scatter, rays_in, n0, n1, max_interactions, Fr_or_TMM=0, lookuptable=None, direction=-1):
+    ray_queue = rays_in
+    reflected_rays = []
+    transmitted_rays = []
+
+    how_many_faces = len(surface.N)
+    normals = surface.N
+    # if rays going upwards towards bottom side of surface, then make the surface normals all inverted 
+    if direction==-1:
+        normals = -1*normals
+
+    # todo: do something about this
+    opposite_faces = np.where(np.dot(normals, normals.T) < 0)[1]
+
+    area = np.sqrt(
+        np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
+        ) / 2
+
+    relevant_face = np.arange(how_many_faces)
+
+    # first do ray tracing, without calculating the intensity of reflectance/transmittance
+    for _ in range(max_interactions):
+        num_of_rays = len(ray_queue)
+        if num_of_rays==0:
+            break
+        ray_directions = get_ray_directions(ray_queue)
+        cos_inc = -np.dot(ray_directions, normals[relevant_face].T) # dot product, resulting in shape (num of rays, num of faces)
+        hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
+        hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
+        hit_prob = hit_prob / np.sum(hit_prob, axis=1)[:, None]
+        scatter_angles = np.arccos(cos_inc)
+
+        for i in range(how_many_faces):
+            normal_component = np.dot(cos_inc[:,i][:,None],normals[i][None,:])
+            reflected_directions = ray_directions - 2 * normal_component
+            reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
+
+            tr_par = (n0 / n1) * (ray_directions - normal_component)
+            tr_par_length = np.linalg.norm(tr_par,axis=1)
+            tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[relevant_face]
+
+            refracted_directions = np.real(tr_par + tr_perp)
+            refracted_directions  = refracted_directions / np.linalg.norm(refracted_directions, axis=1)[:,None]
+
+            for j in range(num_of_rays):
+                if hit_prob[j,i] > 0:
+                    # reflected and transmitted rays
+                    reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
+                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i], is_texture_scatter=is_texture_scatter, spawned_surf_index=surf_index, up_or_down=direction*-1)
+                    ray_queue[j].reflected_child = reflected_ray
+                    if np.sign(reflected_directions[j][2])*direction==1:
+                        reflected_rays.append(reflected_ray)
+                    else:
+                        ray_queue.append(reflected_ray)
+                    if tr_par_length[j] < 1: # not total internally reflected
+                        transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
+                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i], is_texture_scatter=is_texture_scatter, spawned_surf_index=surf_index, up_or_down=direction)
+                        ray_queue[j].transmitted_child = transmitted_ray
+                        transmitted_rays.append(transmitted_ray)
+            
+        ray_queue = ray_queue[num_of_rays:]
+    return reflected_rays, transmitted_rays
+
 
 def analytical_front_surface(front, r_in, n0, n1, pol, max_interactions, n_layers, direction,
                              n_reps,

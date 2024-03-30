@@ -6,7 +6,7 @@
 # Contact: p.pearce@unsw.edu.au
 
 import numpy as np
-from sparse import load_npz, dot, COO, stack
+from sparse import load_npz, dot, COO, stack, einsum
 from rayflare.angles import make_angle_vector, fold_phi, overall_bin
 import os
 import xarray as xr
@@ -157,26 +157,20 @@ def make_D(alphas, thick, thetas):
     D_1 = stack([COO.from_numpy(np.diag(x)) for x in diag])
     return D_1
 
-
+# using einsum yields roughly 25 times speed increase (if for loop loops over 60 wavelengths)
 def dot_wl(mat, vec):
 
-    result = np.empty((vec.shape[0], mat.shape[1]))
-
     if len(mat.shape) == 3:
-        for i1 in range(vec.shape[0]):  # loop over wavelengths
-            result[i1, :] = dot(mat[i1], vec[i1])
+        result = einsum('ijk,ik->ij', mat, vec).todense()
 
     if len(mat.shape) == 2:
-        for i1 in range(vec.shape[0]):  # loop over wavelengths
-            result[i1, :] = dot(mat, vec[i1])
+        result = einsum('ijk,ik->ij', mat, vec).todense()
 
     return result
 
-
+# using einsum yields roughly 7 times speed increase (if for loop loops over 60 wavelengths)
 def dot_wl_u2d(mat, vec):
-    result = np.empty((vec.shape[0], vec.shape[1]))
-    for i1 in range(vec.shape[0]):  # loop over wavelengths
-        result[i1, :] = dot(mat, vec[i1])
+    result = einsum('jk,ik->ij', mat, vec).todense()
     return result
 
 

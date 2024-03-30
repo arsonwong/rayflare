@@ -46,6 +46,7 @@ def RT(
     widths=None,
     save=True,
     overwrite=False,
+    analytical_approx = False
 ):
     """Calculates the reflection/transmission and absorption redistribution matrices for an interface using
     either a previously calculated TMM lookup table or the Fresnel equations.
@@ -206,43 +207,74 @@ def RT(
             ]
         )
 
-        if options["random_ray_position"]:
-            xs = np.random.uniform(x_limits[0], x_limits[1], nx)
-            ys = np.random.uniform(y_limits[0], y_limits[1], ny)
+        if analytical_approx is False:
+            if options["random_ray_position"]:
+                xs = np.random.uniform(x_limits[0], x_limits[1], nx)
+                ys = np.random.uniform(y_limits[0], y_limits[1], ny)
 
-        else:
-            xs = np.linspace(x_limits[0], x_limits[1], nx)
-            ys = np.linspace(y_limits[0], y_limits[1], ny)
+            else:
+                xs = np.linspace(x_limits[0], x_limits[1], nx)
+                ys = np.linspace(y_limits[0], y_limits[1], ny)
 
-        allres = Parallel(n_jobs=n_jobs)(
-            delayed(RT_wl)(
-                i1,
-                wavelengths[i1],
-                n_angles,
-                nx,
-                ny,
-                widths,
-                thetas_in,
-                phis_in,
-                h,
-                xs,
-                ys,
-                nks,
-                surfaces,
-                pol,
-                phi_sym,
-                theta_intv,
-                phi_intv,
-                angle_vector,
-                Fr_or_TMM,
-                n_absorbing_layers,
-                lookuptable,
-                calc_profile,
-                depth_spacing,
-                side,
+            allres = Parallel(n_jobs=n_jobs)(
+                delayed(RT_wl)(
+                    i1,
+                    wavelengths[i1],
+                    n_angles,
+                    nx,
+                    ny,
+                    widths,
+                    thetas_in,
+                    phis_in,
+                    h,
+                    xs,
+                    ys,
+                    nks,
+                    surfaces,
+                    pol,
+                    phi_sym,
+                    theta_intv,
+                    phi_intv,
+                    angle_vector,
+                    Fr_or_TMM,
+                    n_absorbing_layers,
+                    lookuptable,
+                    calc_profile,
+                    depth_spacing,
+                    side,
+                )
+                for i1 in range(len(wavelengths))
             )
-            for i1 in range(len(wavelengths))
-        )
+        else:
+            allres = Parallel(n_jobs=n_jobs)(
+                delayed(RT_analytical)(
+                    i1,
+                    wavelengths,
+                    1,
+                    nx,
+                    ny,
+                    widths,
+                    thetas_in[i1],
+                    phis_in[i1],
+                    h,
+                    xs,
+                    ys,
+                    nks,
+                    surfaces,
+                    pol,
+                    phi_sym,
+                    theta_intv,
+                    phi_intv,
+                    angle_vector,
+                    Fr_or_TMM,
+                    n_absorbing_layers,
+                    lookuptable,
+                    calc_profile,
+                    depth_spacing,
+                    side,
+                )
+                for i1 in range(len(n_angles))
+            )
 
         allArrays = stack([item[0] for item in allres])
         absArrays = stack([item[1] for item in allres])
