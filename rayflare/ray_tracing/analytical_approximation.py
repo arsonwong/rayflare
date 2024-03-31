@@ -2,6 +2,8 @@ import numpy as np
 import xarray as xr
 import os
 from rayflare.utilities import get_savepath
+from rayflare.angles import fold_phi, make_angle_vector, overall_bin
+from sparse import COO, save_npz, stack
 
 # to do
 # analytical_front_surface - input is a bunch of rays, in optics it's  called initial_ray
@@ -49,7 +51,7 @@ def make_arbitrary_perpendicular_direction(direction):
 # given its parent ray, its own direction, the plane that its parent scattered off of, 
 # and the resultant Rs, Rp or Ts, Tp
 class Ray:
-    def __init__(self, direction, probability=1.0, parent=None, scatter_angle=None, scatter_plane_normal=None, is_texture_scatter=False, surf_index=0, up_or_down=-1):
+    def __init__(self, direction, probability=1.0, parent=None, scatter_angle=None, scatter_plane_normal=None):
         self.direction = direction
         self.probability = probability
         self.scatter_angle = scatter_angle
@@ -57,12 +59,8 @@ class Ray:
         self.parent = parent
         self.transmitted_child = None
         self.reflected_child = None
-        self.spawned_surf_index = surf_index # metadata on which surface the ray is spawned
-        self.up_or_down = up_or_down # metadata on whether the ray is point up (-1) or down (1)
         self.polarization = None
         self.propagated = False
-        self.num_of_texture_scatter = 0
-        self.which_interface # meta data about which interface
         self.memorized_items = []
         if parent is None: # first initial ray, then just make circular polarized
             self.propagated = True
@@ -75,9 +73,6 @@ class Ray:
             self.polarization = Polarization(s_vector, p_vector)
         if parent:
             self.probability = self.probability*parent.probability
-            self.num_of_texture_scatter = parent.num_of_texture_scatter
-            if is_texture_scatter:
-                self.num_of_texture_scatter += 1
 
     def turn_into_initial_ray(self):
         self.scatter_angle = None
@@ -127,17 +122,18 @@ class Ray:
         else:
             s_component = s_component.T
         s_component = np.sqrt(s_component[:,0]**2+s_component[:,1]**2) 
-        s_component = s_component*np.sqrt(R_or_T_s) # R_s can be a vector of many wavelengths
+        s_component_after_scatter = s_component*np.sqrt(R_or_T_s) # R_s can be a vector of many wavelengths
         p_component = np.array([np.dot(parent_s_vector, old_p_direction), np.dot(parent_p_vector, old_p_direction)])
         if np.ndim(p_component) == 1:
             p_component = p_component.reshape(1,-1)
         else:
             p_component = p_component.T
         p_component = np.sqrt(p_component[:,0]**2+p_component[:,1]**2) 
-        p_component = p_component*np.sqrt(R_or_T_p) # R_p can be a vector of many wavelengths
-        s_vector = np.outer(s_component, new_s_direction) 
-        p_vector = np.outer(p_component, new_p_direction)
+        p_component_after_scatter = p_component*np.sqrt(R_or_T_p) # R_p can be a vector of many wavelengths
+        s_vector = np.outer(s_component_after_scatter, new_s_direction) 
+        p_vector = np.outer(p_component_after_scatter, new_p_direction)
         self.polarization = Polarization(s_vector, p_vector)
+        return s_component, p_component  # this is for reference, aid in other calculations if needed
 
 def get_ray_directions(ray_queue):
     directions = []
@@ -282,20 +278,13 @@ def calc_RAT_TMM(theta, pol, *args):
 
 
 def RT_analytical(
-    i1,
     wl,
-    n_angles,
-    nx,
-    ny,
-    widths,
     theta_in,
     phi_in,
-    h,
-    xs,
-    ys,
-    nks,
-    surfaces,
-    pol,
+    n0, 
+    n1, 
+    max_interactions, 
+    surface,
     phi_sym,
     theta_intv,
     phi_intv,
@@ -303,67 +292,96 @@ def RT_analytical(
     Fr_or_TMM,
     n_abs_layers,
     lookuptable,
-    calc_profile,
-    depth_spacing,
-    side,
+    side
 ):
 
-    if lookuptable is not None:
-        lookuptable_wl = lookuptable.sel(wl=wl * 1e9).load()
+    how_many_faces = len(surface.N)
+    normals = surface.N
 
+    opposite_faces = np.where(np.dot(normals, normals.T) < 0)[1]
+
+    if len(opposite_faces) == 0:
+        max_interactions =  1
+
+    if Fr_or_TMM == 0:
+        calc_RAT = calc_RAT_Fresnel
+        R_args = [n0, n1]
     else:
-        lookuptable_wl = None
+        calc_RAT = calc_RAT_TMM
+        R_args = [lookuptable, 1]
 
-    logger.info(f"RT calculation for wavelength = {wl * 1e9} nm")
+    area = np.sqrt(
+    np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
+    ) / 2
 
-    theta_out = np.zeros((n_angles, nx * ny))
-    phi_out = np.zeros((n_angles, nx * ny))
-    A_surface_layers = np.zeros((n_angles, nx * ny, n_abs_layers))
-    theta_local_incidence = np.zeros((n_angles, nx * ny))
+    relevant_face = np.arange(how_many_faces)
 
-    for i2 in range(n_angles):
+    # define the incident ray
+    ray_queue = [Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)*side]))]
 
-        theta = thetas_in[i2]
-        phi = phis_in[i2]
-        r = abs((h + 1e-8) / cos(theta))
-        r_a_0 = np.real(
-            np.array(
-                [r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta)]
-            )
-        )
-        for c, vals in enumerate(product(xs, ys)):
-            _, th_o, phi_o, surface_A = single_ray_interface(
-                vals[0],
-                vals[1],
-                nks[:, i1],
-                r_a_0,
-                theta,
-                phi,
-                surfaces,
-                pol,
-                wl,
-                Fr_or_TMM,
-                lookuptable_wl,
-            )
+    # do the analytical ray tracing here
+    scattered_rays = []
+    A_mat = np.zeros((len(wl), n_abs_layers))
+    for _ in range(max_interactions):
+        num_of_rays = len(ray_queue)
+        if num_of_rays==0:
+            break
+        ray_directions = get_ray_directions(ray_queue)
+        cos_inc = -np.dot(ray_directions, normals[relevant_face].T) # dot product, resulting in shape (num of rays, num of faces)
+        hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
+        hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
+        hit_prob = hit_prob / np.sum(hit_prob, axis=1)[:, None]
+        scatter_angles = np.arccos(cos_inc)
 
-            if th_o < 0:  # can do outside loup with np.where
-                th_o = -th_o
-                phi_o = phi_o + np.pi
-            theta_out[i2, c] = th_o
-            phi_out[i2, c] = phi_o
-            A_surface_layers[i2, c] = surface_A[0]
-            theta_local_incidence[i2, c] = np.real(surface_A[1])
+        for i in range(how_many_faces):
+            normal_component = np.dot(cos_inc[:,i][:,None],normals[i][None,:])
+            reflected_directions = ray_directions - 2 * normal_component
+            reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
 
-    phi_out = fold_phi(phi_out, phi_sym)
-    phis_in = fold_phi(phis_in, phi_sym)
+            tr_par = (n0 / n1) * (ray_directions - normal_component)
+            tr_par_length = np.linalg.norm(tr_par,axis=1)
+            tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[relevant_face]
+
+            refracted_directions = np.real(tr_par + tr_perp)
+            refracted_directions  = refracted_directions / np.linalg.norm(refracted_directions, axis=1)[:,None]
+
+            for j in range(num_of_rays):
+                if hit_prob[j,i] > 0:
+                    # reflected and transmitted rays
+                    Rs, As_per_layer, Ts = calc_RAT(np.arccos(cos_inc), 's', *R_args)
+                    Rp, Ap_per_layer, Tp = calc_RAT(np.arccos(cos_inc), 'p', *R_args)
+                    reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
+                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i])
+                    s_component, p_component = reflected_ray.propagate_R_or_T(Rs, Rp)
+                    A_mat += ray_queue[j].getIntensity()*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
+                    ray_queue[j].reflected_child = reflected_ray
+                    if np.sign(reflected_directions[j][2])*side==1:
+                        scattered_rays.append(reflected_ray)
+                    else:
+                        ray_queue.append(reflected_ray)
+                    if tr_par_length[j] < 1: # not total internally reflected
+                        transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
+                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i])
+                        transmitted_ray.propagate_R_or_T(Ts, Tp)
+                        ray_queue[j].transmitted_child = transmitted_ray
+                        scattered_rays.append(transmitted_ray)
+            
+        ray_queue = ray_queue[num_of_rays:]
+
+    # now, compile the results
+    scattered_ray_directions = get_ray_directions(scattered_rays)
+    horizontal_comp = np.sqrt(scattered_ray_directions[:,0]**2+scattered_ray_directions[:,1]**2)
+    horizontal_comp[horizontal_comp==0] = 1.0 # just to avoid division by zero later
+    thetas_out = np.arccos(scattered_ray_directions[:,2])
+    phis_out = np.arccos(scattered_ray_directions[:,1]/horizontal_comp)
+
+    phis_out = fold_phi(phis_out, phi_sym)
+    phi_in = fold_phi(phi_in, phi_sym)
+
+    # theta_local_incidence = np.zeros((n_angles, nx * ny))
 
     if side == -1:
-        not_absorbed = np.where(theta_out < (np.pi + 0.1))
-        thetas_in = np.pi - thetas_in
-        # phis_in = np.pi-phis_in # unsure about this part
-
-        theta_out[not_absorbed] = np.pi - theta_out[not_absorbed]
-        # phi_out = np.pi-phi_out # unsure about this part
+        thetas_out = np.pi - thetas_out
 
     theta_local_incidence = np.abs(theta_local_incidence)
     n_thetas = len(theta_intv) - 1
@@ -373,133 +391,26 @@ def RT_analytical(
         theta_intv = np.append(theta_intv, 11)
         phi_intv = phi_intv + [np.array([0])]
 
-    # xarray: can use coordinates in calculations using apply!
-    binned_theta_in = np.digitize(thetas_in, theta_intv, right=True) - 1
-
-    binned_theta_out = np.digitize(theta_out, theta_intv, right=True) - 1
-    # -1 to give the correct index for the bins in phi_intv
-
-    phi_in = xr.DataArray(
-        phis_in,
-        coords={"theta_bin": (["angle_in"], binned_theta_in)},
-        dims=["angle_in"],
-    )
-
-    bin_in = (
-        phi_in.groupby("theta_bin")
-        .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
-        .data
-    )
-
-    phi_out = xr.DataArray(
-        phi_out,
+    binned_theta_out = np.digitize(thetas_out, theta_intv, right=True) - 1
+    phis_out = xr.DataArray(
+        phis_out,
         coords={"theta_bin": (["angle_in", "position"], binned_theta_out)},
         dims=["angle_in", "position"],
     )
-
     bin_out = (
-        phi_out.groupby("theta_bin")
+        phis_out.groupby("theta_bin")
         .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
         .data
     )
 
-    out_mat = np.zeros((len(angle_vector), int(len(angle_vector) / 2)))
-    # everything is coming in from above so we don't need 90 -> 180 in incoming bins
-    A_mat = np.zeros((n_abs_layers, int(len(angle_vector) / 2)))
-
-    n_rays_in_bin = np.zeros(int(len(angle_vector) / 2))
-    n_rays_in_bin_abs = np.zeros(int(len(angle_vector) / 2))
-
-    binned_local_angles = np.digitize(theta_local_incidence, theta_intv, right=True) - 1
-
-    local_angle_mat = np.zeros(
-        (int((len(theta_intv) - 1) / 2), int(len(angle_vector) / 2))
-    )
-
-    if side == 1:
-        offset = 0
-    else:
-        offset = int(len(angle_vector) / 2)
-
-    for l1 in range(len(thetas_in)):
-        for l2 in range(nx * ny):
-            n_rays_in_bin[bin_in[l1] - offset] += 1
-            if binned_theta_out[l1, l2] <= (n_thetas - 1):
-                # reflected or transmitted
-                out_mat[bin_out[l1, l2], bin_in[l1] - offset] += 1
-
-            else:
-                # absorbed in one of the surface layers
-                n_rays_in_bin_abs[bin_in[l1] - offset] += 1
-                per_layer = A_surface_layers[l1, l2]
-                A_mat[:, bin_in[l1] - offset] += per_layer
-                local_angle_mat[binned_local_angles[l1, l2], bin_in[l1] - offset] += 1
-
-    # normalize
-    out_mat = np.divide(out_mat, n_rays_in_bin, where=n_rays_in_bin != 0)
-    overall_abs_frac = np.divide(
-        n_rays_in_bin_abs, n_rays_in_bin, where=n_rays_in_bin != 0
-    )
-    abs_scale = np.divide(
-        overall_abs_frac, np.sum(A_mat, 0), where=np.sum(A_mat, 0) != 0
-    )
-
-    intgr = np.divide(
-        np.sum(A_mat, 0),
-        n_rays_in_bin_abs,
-        where=n_rays_in_bin_abs != 0,
-        out=np.zeros_like(n_rays_in_bin_abs),
-    )
-    A_mat = abs_scale * A_mat
-    out_mat[np.isnan(out_mat)] = 0
-    A_mat[np.isnan(A_mat)] = 0
+    out_mat = np.zeros((len(wl), len(angle_vector))) 
+    for l1 in range(len(thetas_out)):
+        out_mat[:,bin_out[l1]] += scattered_rays[l1].getIntensity()
 
     out_mat = COO.from_numpy(out_mat)  # sparse matrix
     A_mat = COO.from_numpy(A_mat)
 
-    if Fr_or_TMM > 0:
-        local_angle_mat = np.divide(
-            local_angle_mat,
-            np.sum(local_angle_mat, 0),
-            where=np.sum(local_angle_mat, 0) != 0,
-            out=np.zeros_like(local_angle_mat),
-        )
-        local_angle_mat[np.isnan(local_angle_mat)] = 0
-        local_angle_mat = COO.from_numpy(local_angle_mat)
-
-        if calc_profile is not None:
-            n_a_in = int(len(angle_vector) / 2)
-            thetas = angle_vector[:n_a_in, 1]
-            unique_thetas = np.unique(thetas)
-
-            profile = make_profiles_wl(
-                unique_thetas,
-                n_a_in,
-                side,
-                widths,
-                local_angle_mat,
-                wl,
-                lookuptable_wl,
-                pol,
-                depth_spacing,
-                calc_profile,
-            )
-
-            profile = profile.rename({"dim_0": "z"})
-
-            intgr = xr.DataArray(
-                intgr,
-                dims=["global_index"],
-                coords={"global_index": np.arange(0, n_a_in)},
-            ).fillna(0)
-
-            return out_mat, A_mat, local_angle_mat, profile, intgr
-
-        else:
-            return out_mat, A_mat, local_angle_mat
-
-    else:
-        return out_mat, A_mat
+    return out_mat, A_mat
     
 
 # 2024-03-26: Johnson's implementation that uses the Ray class

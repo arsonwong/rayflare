@@ -27,7 +27,7 @@ from solcore.state import State
 from rayflare.angles import fold_phi, make_angle_vector, overall_bin
 from rayflare.utilities import get_matrices_or_paths, get_savepath, get_wavelength
 from rayflare.transfer_matrix_method.lookup_table import make_TMM_lookuptable
-from .analytical_approximation import analytical_front_surface, lambertian_scattering, calculate_lambertian_profile
+from .analytical_approximation import analytical_front_surface, lambertian_scattering, calculate_lambertian_profile, RT_analytical
 
 from rayflare import logger
 
@@ -248,20 +248,13 @@ def RT(
         else:
             allres = Parallel(n_jobs=n_jobs)(
                 delayed(RT_analytical)(
-                    i1,
                     wavelengths,
-                    1,
-                    nx,
-                    ny,
-                    widths,
                     thetas_in[i1],
                     phis_in[i1],
-                    h,
-                    xs,
-                    ys,
-                    nks,
-                    surfaces,
-                    pol,
+                    n0,
+                    n1,
+                    10,
+                    surfaces[0],
                     phi_sym,
                     theta_intv,
                     phi_intv,
@@ -269,8 +262,6 @@ def RT(
                     Fr_or_TMM,
                     n_absorbing_layers,
                     lookuptable,
-                    calc_profile,
-                    depth_spacing,
                     side,
                 )
                 for i1 in range(len(n_angles))
@@ -278,6 +269,11 @@ def RT(
 
         allArrays = stack([item[0] for item in allres])
         absArrays = stack([item[1] for item in allres])
+        if analytical_approx:
+            # in angles, wavelengths, out angles --> wavelengths, out angles, in angles
+            allArrays = np.transpose(allArrays, (1, 2, 0))
+            # in angles, wavelengths, layers --> wavelengths, layers, in angles
+            absArrays = np.transpose(absArrays, (1, 2, 0))
 
         if save:
             save_npz(path_or_mats[0], allArrays)
