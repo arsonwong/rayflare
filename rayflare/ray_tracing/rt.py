@@ -87,6 +87,8 @@ def RT(
     else:
         get_wavelength(options)
         wavelengths = options["wavelength"]
+
+        # these are relevant only if analytical_approx = False
         n_rays = options["n_rays"]
         nx = options["nx"]
         ny = options["ny"]
@@ -127,7 +129,12 @@ def RT(
             n_theta_bins, phi_sym, c_az, theta_spacing
         )
 
-        if only_incidence_angle:
+        if analytical_approx:
+            # make the thetas_in, phis_in exactly matching the bins
+            angles_in = angle_vector[: int(len(angle_vector) / 2), :]
+            thetas_in = angles_in[:, 1]
+            phis_in = angles_in[:, 2]
+        elif only_incidence_angle:
             logger.info("Calculating matrix only for incidence theta/phi")
             if options["theta_in"] == 0:
                 th_in = 0.0001
@@ -246,11 +253,32 @@ def RT(
                 for i1 in range(len(wavelengths))
             )
         else:
-            allres = Parallel(n_jobs=n_jobs)(
+            if side == 1:
+                n0 = nks[0]
+                n1 = nks[1]
+            else:
+                n0 = nks[1]
+                n1 = nks[0]
+
+            # looking up tables this way is way faster, by 10 times
+            radian_table = lookuptable.coords['angle'].data
+            R_T_table = np.array([lookuptable.loc[dict(side=side, pol='s')]['R'].data, 
+                 lookuptable.loc[dict(side=side, pol='s')]['T'].data, 
+                 lookuptable.loc[dict(side=side, pol='p')]['R'].data, 
+                 lookuptable.loc[dict(side=side, pol='p')]['T'].data])
+            R_T_table = np.transpose(R_T_table,(2,0,1))
+            R_T_table[R_T_table<0] = 0.0
+            A_table = np.array([lookuptable.loc[dict(side=side, pol='s')]['Alayer'].data, 
+                        lookuptable.loc[dict(side=side, pol='p')]['Alayer'].data])
+            A_table = np.transpose(A_table,(2,0,1,3))
+            A_table[A_table<0] = 0.0
+
+            # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
+            # multiprocessing not working, for some reason
+            allres = Parallel(n_jobs=8)(
                 delayed(RT_analytical)(
+                    angles_in[i1],
                     wavelengths,
-                    thetas_in[i1],
-                    phis_in[i1],
                     n0,
                     n1,
                     10,
@@ -261,10 +289,12 @@ def RT(
                     angle_vector,
                     Fr_or_TMM,
                     n_absorbing_layers,
-                    lookuptable,
+                    radian_table,
+                    R_T_table,
+                    A_table,
                     side,
                 )
-                for i1 in range(len(n_angles))
+                for i1 in range(angles_in.shape[0])
             )
 
         allArrays = stack([item[0] for item in allres])

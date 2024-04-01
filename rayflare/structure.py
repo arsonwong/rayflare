@@ -79,7 +79,7 @@ class Interface:
         **kwargs,
     ):
         """Layer class constructor."""
-        valid_methods = ["RT_Fresnel", "RT_TMM", "RCWA", "TMM", "Mirror", "Lambertian"]
+        valid_methods = ["RT_Fresnel", "RT_TMM", "RT_analytical_TMM", "RCWA", "TMM", "Mirror", "Lambertian"]
         if method not in valid_methods:
             raise ValueError(
                 f"Unknown method {method}. Please use one of the following: {valid_methods}."

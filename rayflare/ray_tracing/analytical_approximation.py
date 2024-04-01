@@ -271,16 +271,14 @@ def calc_RAT_TMM(theta, pol, *args):
 
     R = np.real(data["R"].data)
     A_per_layer = np.real(data["Alayer"].data)
-    T = 1 - R - np.sum(A_per_layer, axis=1)
-
+    T = 1 - R - np.sum(A_per_layer, axis=-1)
     return R, A_per_layer, T
 
 
-
+# RT_analytical only works with one surface
 def RT_analytical(
+    angle_in,
     wl,
-    theta_in,
-    phi_in,
     n0, 
     n1, 
     max_interactions, 
@@ -291,10 +289,14 @@ def RT_analytical(
     angle_vector,
     Fr_or_TMM,
     n_abs_layers,
-    lookuptable,
+    radian_table,
+    R_T_table,
+    A_table,
     side
 ):
 
+    theta_in = angle_in[1]
+    phi_in = angle_in[2]
     how_many_faces = len(surface.N)
     normals = surface.N
 
@@ -303,12 +305,12 @@ def RT_analytical(
     if len(opposite_faces) == 0:
         max_interactions =  1
 
-    if Fr_or_TMM == 0:
-        calc_RAT = calc_RAT_Fresnel
-        R_args = [n0, n1]
-    else:
-        calc_RAT = calc_RAT_TMM
-        R_args = [lookuptable, 1]
+    # if Fr_or_TMM == 0:
+    #     calc_RAT = calc_RAT_Fresnel
+    #     R_args = [n0, n1]
+    # else:
+    #     calc_RAT = calc_RAT_TMM
+    #     R_args = [lookuptable, 1]
 
     area = np.sqrt(
     np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
@@ -322,25 +324,27 @@ def RT_analytical(
     # do the analytical ray tracing here
     scattered_rays = []
     A_mat = np.zeros((len(wl), n_abs_layers))
-    for _ in range(max_interactions):
+
+    for iter in range(max_interactions):
         num_of_rays = len(ray_queue)
+        # print("iter = ", iter, " num of rays = ", num_of_rays)
         if num_of_rays==0:
             break
         ray_directions = get_ray_directions(ray_queue)
         cos_inc = -np.dot(ray_directions, normals[relevant_face].T) # dot product, resulting in shape (num of rays, num of faces)
+        angle_inc = np.arccos(cos_inc)
         hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
         hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
         hit_prob = hit_prob / np.sum(hit_prob, axis=1)[:, None]
-        scatter_angles = np.arccos(cos_inc)
 
         for i in range(how_many_faces):
-            normal_component = np.dot(cos_inc[:,i][:,None],normals[i][None,:])
+            normal_component = -np.dot(cos_inc[:,i][:,None],normals[i][None,:])
             reflected_directions = ray_directions - 2 * normal_component
             reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
-
-            tr_par = (n0 / n1) * (ray_directions - normal_component)
+            # for now, approximate long wavelength limit for n0, n1, so the refracted angle is the same for all wavelengths considered
+            tr_par = (n0[-1] / n1[-1]) * (ray_directions - normal_component)
             tr_par_length = np.linalg.norm(tr_par,axis=1)
-            tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[relevant_face]
+            tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[i]
 
             refracted_directions = np.real(tr_par + tr_perp)
             refracted_directions  = refracted_directions / np.linalg.norm(refracted_directions, axis=1)[:,None]
@@ -348,12 +352,36 @@ def RT_analytical(
             for j in range(num_of_rays):
                 if hit_prob[j,i] > 0:
                     # reflected and transmitted rays
-                    Rs, As_per_layer, Ts = calc_RAT(np.arccos(cos_inc), 's', *R_args)
-                    Rp, Ap_per_layer, Tp = calc_RAT(np.arccos(cos_inc), 'p', *R_args)
+                    index = np.searchsorted(radian_table, angle_inc[j,i], side='right')-1
+                    if index == radian_table.shape[0]-1:
+                        R_T_entry = R_T_table[index]
+                        A_entry = A_table[index]
+                    else:
+                        dist1 = angle_inc[j,i] - radian_table[index]
+                        dist2 = radian_table[index+1] - angle_inc[j,i]
+                        R_T_entry = (R_T_table[index]*dist2 + R_T_table[index+1]*dist1)/(dist1+dist2)
+                        A_entry = (A_table[index]*dist2 + A_table[index+1]*dist1)/(dist1+dist2)
+
+                    Rs = R_T_entry[0]
+                    Rp = R_T_entry[2]
+                    Ts = R_T_entry[1]
+                    Tp = R_T_entry[3]
+                    As_per_layer = A_entry[0]
+                    Ap_per_layer = A_entry[1]
+
+                    # Rs, As_per_layer, Ts = calc_RAT(angle_inc[j,i], 's', *R_args)
+                    # Rp, Ap_per_layer, Tp = calc_RAT(angle_inc[j,i], 'p', *R_args)
+                    # As_per_layer[As_per_layer < 0] = 0
+                    # Ap_per_layer[Ap_per_layer < 0] = 0
+
                     reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i])
+                                         scatter_angle=angle_inc[j,i], scatter_plane_normal=normals[i])
                     s_component, p_component = reflected_ray.propagate_R_or_T(Rs, Rp)
-                    A_mat += ray_queue[j].getIntensity()*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
+                    
+                    if s_component.shape[0]==1:
+                        A_mat += ray_queue[j].getIntensity()*(s_component[0]*As_per_layer + p_component[0]*Ap_per_layer)
+                    else:
+                        A_mat += ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
                     ray_queue[j].reflected_child = reflected_ray
                     if np.sign(reflected_directions[j][2])*side==1:
                         scattered_rays.append(reflected_ray)
@@ -361,11 +389,11 @@ def RT_analytical(
                         ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
                         transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i])
+                                         scatter_angle=angle_inc[j,i], scatter_plane_normal=normals[i])
                         transmitted_ray.propagate_R_or_T(Ts, Tp)
                         ray_queue[j].transmitted_child = transmitted_ray
                         scattered_rays.append(transmitted_ray)
-            
+
         ray_queue = ray_queue[num_of_rays:]
 
     # now, compile the results
@@ -383,9 +411,6 @@ def RT_analytical(
     if side == -1:
         thetas_out = np.pi - thetas_out
 
-    theta_local_incidence = np.abs(theta_local_incidence)
-    n_thetas = len(theta_intv) - 1
-
     if Fr_or_TMM > 0:
         # now we need to make bins for the absorption
         theta_intv = np.append(theta_intv, 11)
@@ -394,8 +419,8 @@ def RT_analytical(
     binned_theta_out = np.digitize(thetas_out, theta_intv, right=True) - 1
     phis_out = xr.DataArray(
         phis_out,
-        coords={"theta_bin": (["angle_in", "position"], binned_theta_out)},
-        dims=["angle_in", "position"],
+        coords={"theta_bin": (["angle_in"], binned_theta_out)},
+        dims=["angle_in"],
     )
     bin_out = (
         phis_out.groupby("theta_bin")
@@ -411,73 +436,6 @@ def RT_analytical(
     A_mat = COO.from_numpy(A_mat)
 
     return out_mat, A_mat
-    
-
-# 2024-03-26: Johnson's implementation that uses the Ray class
-# direction = upwards (-1) or downwards (1)
-# if upwards, then make the surface normals all inverted
-def analytical_scatter(surface, surf_index, is_texture_scatter, rays_in, n0, n1, max_interactions, Fr_or_TMM=0, lookuptable=None, direction=-1):
-    ray_queue = rays_in
-    reflected_rays = []
-    transmitted_rays = []
-
-    how_many_faces = len(surface.N)
-    normals = surface.N
-    # if rays going upwards towards bottom side of surface, then make the surface normals all inverted 
-    if direction==-1:
-        normals = -1*normals
-
-    # todo: do something about this
-    opposite_faces = np.where(np.dot(normals, normals.T) < 0)[1]
-
-    area = np.sqrt(
-        np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
-        ) / 2
-
-    relevant_face = np.arange(how_many_faces)
-
-    # first do ray tracing, without calculating the intensity of reflectance/transmittance
-    for _ in range(max_interactions):
-        num_of_rays = len(ray_queue)
-        if num_of_rays==0:
-            break
-        ray_directions = get_ray_directions(ray_queue)
-        cos_inc = -np.dot(ray_directions, normals[relevant_face].T) # dot product, resulting in shape (num of rays, num of faces)
-        hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
-        hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
-        hit_prob = hit_prob / np.sum(hit_prob, axis=1)[:, None]
-        scatter_angles = np.arccos(cos_inc)
-
-        for i in range(how_many_faces):
-            normal_component = np.dot(cos_inc[:,i][:,None],normals[i][None,:])
-            reflected_directions = ray_directions - 2 * normal_component
-            reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
-
-            tr_par = (n0 / n1) * (ray_directions - normal_component)
-            tr_par_length = np.linalg.norm(tr_par,axis=1)
-            tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[relevant_face]
-
-            refracted_directions = np.real(tr_par + tr_perp)
-            refracted_directions  = refracted_directions / np.linalg.norm(refracted_directions, axis=1)[:,None]
-
-            for j in range(num_of_rays):
-                if hit_prob[j,i] > 0:
-                    # reflected and transmitted rays
-                    reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i], is_texture_scatter=is_texture_scatter, spawned_surf_index=surf_index, up_or_down=direction*-1)
-                    ray_queue[j].reflected_child = reflected_ray
-                    if np.sign(reflected_directions[j][2])*direction==1:
-                        reflected_rays.append(reflected_ray)
-                    else:
-                        ray_queue.append(reflected_ray)
-                    if tr_par_length[j] < 1: # not total internally reflected
-                        transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=scatter_angles[j,i], scatter_plane_normal=normals[i], is_texture_scatter=is_texture_scatter, spawned_surf_index=surf_index, up_or_down=direction)
-                        ray_queue[j].transmitted_child = transmitted_ray
-                        transmitted_rays.append(transmitted_ray)
-            
-        ray_queue = ray_queue[num_of_rays:]
-    return reflected_rays, transmitted_rays
 
 
 def analytical_front_surface(front, r_in, n0, n1, pol, max_interactions, n_layers, direction,
