@@ -51,10 +51,10 @@ def make_arbitrary_perpendicular_direction(direction):
 # given its parent ray, its own direction, the plane that its parent scattered off of, 
 # and the resultant Rs, Rp or Ts, Tp
 class Ray:
-    def __init__(self, direction, probability=1.0, parent=None, scatter_angle=None, scatter_plane_normal=None):
+    def __init__(self, direction, probability=1.0, parent=None, angle_inc=None, scatter_plane_normal=None):
         self.direction = direction
         self.probability = probability
-        self.scatter_angle = scatter_angle
+        self.angle_inc = angle_inc
         self.scatter_plane_normal = scatter_plane_normal
         self.parent = parent
         self.transmitted_child = None
@@ -75,7 +75,7 @@ class Ray:
             self.probability = self.probability*parent.probability
 
     def turn_into_initial_ray(self):
-        self.scatter_angle = None
+        self.angle_inc = None
         self.parent = None
         self.scatter_plane_normal=None
         self.propagated = True
@@ -179,7 +179,7 @@ def calc_RAT_Fresnel(theta, pol, *args):
                 )
                 ** 2
         )
-        return Rs, [0]
+        return Rs, [0], 1-Rs
 
     if pol == "p":
         Rp = (
@@ -189,7 +189,7 @@ def calc_RAT_Fresnel(theta, pol, *args):
                 )
                 ** 2
         )
-        return Rp, [0]
+        return Rp, [0], 1-Rp
 
     else:
         Rs = (
@@ -206,7 +206,7 @@ def calc_RAT_Fresnel(theta, pol, *args):
                 )
                 ** 2
         )
-        return (Rs + Rp) / 2, np.array([0])
+        return (Rs + Rp) / 2, np.array([0]), 1-(Rs + Rp) / 2
 
 def calc_RAT_Fresnel_vec(theta, pol, *args):
 
@@ -259,7 +259,7 @@ def calc_RAT_Fresnel_vec(theta, pol, *args):
         # Rs[np.isnan(Rs)] = 1
         # Rp[np.isnan(Rp)] = 1
 
-        return (Rs + Rp) / 2, np.array([0])
+        return (Rs + Rp) / 2, np.array([0]), 1-(Rs + Rp) / 2
 
 def calc_RAT_TMM(theta, pol, *args):
     lookuptable = args[0]
@@ -298,19 +298,12 @@ def RT_analytical(
     theta_in = angle_in[1]
     phi_in = angle_in[2]
     how_many_faces = len(surface.N)
-    normals = surface.N
+    normals = surface.N  # surface normals point upwards regardless of side
 
     opposite_faces = np.where(np.dot(normals, normals.T) < 0)[1]
 
     if len(opposite_faces) == 0:
         max_interactions =  1
-
-    # if Fr_or_TMM == 0:
-    #     calc_RAT = calc_RAT_Fresnel
-    #     R_args = [n0, n1]
-    # else:
-    #     calc_RAT = calc_RAT_TMM
-    #     R_args = [lookuptable, 1]
 
     area = np.sqrt(
     np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
@@ -319,10 +312,11 @@ def RT_analytical(
     relevant_face = np.arange(how_many_faces)
 
     # define the incident ray
-    ray_queue = [Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)*side]))]
+    ray_queue = [Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)]))]
 
     # do the analytical ray tracing here
     scattered_rays = []
+    thetas_local_incidence = []
     A_mat = np.zeros((len(wl), n_abs_layers))
 
     for iter in range(max_interactions):
@@ -351,31 +345,33 @@ def RT_analytical(
 
             for j in range(num_of_rays):
                 if hit_prob[j,i] > 0:
-                    # reflected and transmitted rays
-                    index = np.searchsorted(radian_table, angle_inc[j,i], side='right')-1
-                    if index == radian_table.shape[0]-1:
-                        R_T_entry = R_T_table[index]
-                        A_entry = A_table[index]
+                    if iter==0:
+                        thetas_local_incidence.append([hit_prob[j,i],angle_inc[j,i]])
+
+                    if Fr_or_TMM == 0:
+                        Rs, As_per_layer, Ts = calc_RAT_Fresnel(np.arccos(cos_inc), 's', n0, n1)
+                        Rp, Ap_per_layer, Tp = calc_RAT_Fresnel(np.arccos(cos_inc), 'p', n0, n1)
                     else:
-                        dist1 = angle_inc[j,i] - radian_table[index]
-                        dist2 = radian_table[index+1] - angle_inc[j,i]
-                        R_T_entry = (R_T_table[index]*dist2 + R_T_table[index+1]*dist1)/(dist1+dist2)
-                        A_entry = (A_table[index]*dist2 + A_table[index+1]*dist1)/(dist1+dist2)
+                        # reflected and transmitted rays
+                        index = np.searchsorted(radian_table, angle_inc[j,i], side='right')-1
+                        if index == radian_table.shape[0]-1:
+                            R_T_entry = R_T_table[index]
+                            A_entry = A_table[index]
+                        else:
+                            dist1 = angle_inc[j,i] - radian_table[index]
+                            dist2 = radian_table[index+1] - angle_inc[j,i]
+                            R_T_entry = (R_T_table[index]*dist2 + R_T_table[index+1]*dist1)/(dist1+dist2)
+                            A_entry = (A_table[index]*dist2 + A_table[index+1]*dist1)/(dist1+dist2)
 
-                    Rs = R_T_entry[0]
-                    Rp = R_T_entry[2]
-                    Ts = R_T_entry[1]
-                    Tp = R_T_entry[3]
-                    As_per_layer = A_entry[0]
-                    Ap_per_layer = A_entry[1]
-
-                    # Rs, As_per_layer, Ts = calc_RAT(angle_inc[j,i], 's', *R_args)
-                    # Rp, Ap_per_layer, Tp = calc_RAT(angle_inc[j,i], 'p', *R_args)
-                    # As_per_layer[As_per_layer < 0] = 0
-                    # Ap_per_layer[Ap_per_layer < 0] = 0
+                        Rs = R_T_entry[0]
+                        Rp = R_T_entry[2]
+                        Ts = R_T_entry[1]
+                        Tp = R_T_entry[3]
+                        As_per_layer = A_entry[0]
+                        Ap_per_layer = A_entry[1]
 
                     reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=angle_inc[j,i], scatter_plane_normal=normals[i])
+                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i])
                     s_component, p_component = reflected_ray.propagate_R_or_T(Rs, Rp)
                     
                     if s_component.shape[0]==1:
@@ -383,18 +379,21 @@ def RT_analytical(
                     else:
                         A_mat += ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
                     ray_queue[j].reflected_child = reflected_ray
-                    if np.sign(reflected_directions[j][2])*side==1:
+                    if np.sign(reflected_directions[j][2])==1:
                         scattered_rays.append(reflected_ray)
                     else:
                         ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
                         transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         scatter_angle=angle_inc[j,i], scatter_plane_normal=normals[i])
+                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i])
                         transmitted_ray.propagate_R_or_T(Ts, Tp)
                         ray_queue[j].transmitted_child = transmitted_ray
                         scattered_rays.append(transmitted_ray)
 
         ray_queue = ray_queue[num_of_rays:]
+
+
+    thetas_local_incidence = np.abs(np.array(thetas_local_incidence))
 
     # now, compile the results
     scattered_ray_directions = get_ray_directions(scattered_rays)
@@ -406,8 +405,6 @@ def RT_analytical(
     phis_out = fold_phi(phis_out, phi_sym)
     phi_in = fold_phi(phi_in, phi_sym)
 
-    # theta_local_incidence = np.zeros((n_angles, nx * ny))
-
     if side == -1:
         thetas_out = np.pi - thetas_out
 
@@ -416,12 +413,17 @@ def RT_analytical(
         theta_intv = np.append(theta_intv, 11)
         phi_intv = phi_intv + [np.array([0])]
 
+    # thetas_out = thetas_out[:, np.newaxis]
+    # phis_out = phis_out[:, np.newaxis]
     binned_theta_out = np.digitize(thetas_out, theta_intv, right=True) - 1
+
     phis_out = xr.DataArray(
         phis_out,
         coords={"theta_bin": (["angle_in"], binned_theta_out)},
         dims=["angle_in"],
     )
+
+    # this is super slow
     bin_out = (
         phis_out.groupby("theta_bin")
         .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
@@ -435,7 +437,17 @@ def RT_analytical(
     out_mat = COO.from_numpy(out_mat)  # sparse matrix
     A_mat = COO.from_numpy(A_mat)
 
-    return out_mat, A_mat
+    if Fr_or_TMM > 0:
+        binned_local_angles = np.digitize(thetas_local_incidence[:,1], theta_intv, right=True) - 1
+        local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
+        local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
+        local_angle_mat = COO.from_numpy(local_angle_mat)
+
+        return out_mat, A_mat, local_angle_mat
+
+    else:
+        return out_mat, A_mat
+
 
 
 def analytical_front_surface(front, r_in, n0, n1, pol, max_interactions, n_layers, direction,

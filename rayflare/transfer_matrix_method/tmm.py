@@ -10,6 +10,7 @@ import xarray as xr
 from sparse import COO, save_npz, stack
 
 from solcore.absorption_calculator import tmm_core_vec as tmm
+from solcore.absorption_calculator.tmm_core_vec import coh_tmm
 from solcore.absorption_calculator import OptiStack
 
 from rayflare.angles import make_angle_vector, fold_phi
@@ -404,7 +405,7 @@ class tmm_structure:
         :param options: options for the calculation. The key entries are:
 
             - wavelength: Wavelengths (in m) in which calculate the data. An array.
-            - theta_in: Angle (in radians) of the incident light.
+            - thetas_in: Angles (in radians) of the incident light.
             - pol: Polarisation of the light: 's', 'p' or 'u'.
             - coherent: If the light is coherent or not. If not, a coherency list must be added.
             - coherency_list: A list indicating in which layers light should be treated as coherent ('c') and in which \
@@ -596,7 +597,7 @@ class tmm_structure:
         get_wavelength(options)
         wavelength = options["wavelength"] * 1e9
         pol = options["pol"]
-        angle = options["theta_in"]
+        angles = options["thetas_in"]
 
         coherent = options["coherent"] if "coherent" in options.keys() else True
 
@@ -614,13 +615,23 @@ class tmm_structure:
             "all_s": [],
         }
 
+        n_list = layer_stack.get_indices(wavelength)
+        d_list = layer_stack.get_widths()
+        if not isinstance(angles, np.ndarray):
+            angles = np.array([angles])
+        num_angles = angles.shape[0]
+        angles = np.repeat(angles,wavelength.shape[0])
+        wavelength = np.tile(wavelength,num_angles)
+        for i, _ in enumerate(n_list):
+            n_list[i] = np.tile(n_list[i], num_angles)
+
         if pol in "sp":
             if coherent:
-                out = tmm.coh_tmm(
+                out = coh_tmm(
                     pol,
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
-                    angle,
+                    n_list,
+                    d_list,
+                    angles,
                     wavelength,
                 )
                 A_per_layer = tmm.absorp_in_each_layer(out)
@@ -631,10 +642,10 @@ class tmm_structure:
             else:
                 out = tmm.inc_tmm(
                     pol,
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
+                    n_list,
+                    d_list,
                     coherency_list,
-                    angle,
+                    angles,
                     wavelength,
                 )
 
@@ -657,18 +668,18 @@ class tmm_structure:
                 output["A_per_layer"] = A_per_layer
         else:
             if coherent:
-                out_p = tmm.coh_tmm(
+                out_p = coh_tmm(
                     "p",
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
-                    angle,
+                    n_list,
+                    d_list,
+                    angles,
                     wavelength,
                 )
-                out_s = tmm.coh_tmm(
+                out_s = coh_tmm(
                     "s",
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
-                    angle,
+                    n_list,
+                    d_list,
+                    angles,
                     wavelength,
                 )
                 A_per_layer_p = tmm.absorp_in_each_layer(out_p)
@@ -683,18 +694,18 @@ class tmm_structure:
             else:
                 out_p = tmm.inc_tmm(
                     "p",
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
+                    n_list,
+                    d_list,
                     coherency_list,
-                    angle,
+                    angles,
                     wavelength,
                 )
                 out_s = tmm.inc_tmm(
                     "s",
-                    layer_stack.get_indices(wavelength),
-                    layer_stack.get_widths(),
+                    n_list,
+                    d_list,
                     coherency_list,
-                    angle,
+                    angles,
                     wavelength,
                 )
 

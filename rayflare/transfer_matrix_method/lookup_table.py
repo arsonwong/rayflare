@@ -154,24 +154,29 @@ def make_TMM_lookuptable(
             pass_options["coherent"] = coherent
             pass_options["coherency_list"] = coherency_lists[i1]
 
+            tmm_struct = tmm_structure(optstacks[i1])
+
             for pol in pols:
 
-                for i3, theta in enumerate(thetas):
+                pass_options["pol"] = pol
+                pass_options["thetas_in"] = thetas
 
-                    pass_options["pol"] = pol
-                    pass_options["theta_in"] = theta
+                res = tmm_struct.calculate(
+                    pass_options, profile=profile, layers=prof_layer_side
+                )
 
-                    tmm_struct = tmm_structure(optstacks[i1])
-                    res = tmm_struct.calculate(
-                        pass_options, profile=profile, layers=prof_layer_side
-                    )
+                R_result = np.real(res["R"])
+                T_result = np.real(res["T"])
+                A_per_layer_result = np.real(res["A_per_layer"])
+                if profile:
+                    profile_coeff_result = np.real(res["profile_coeff"])
 
-                    R_loop[:, i3] = np.real(res["R"])
-                    T_loop[:, i3] = np.real(res["T"])
-                    Alayer_loop[i3, :, :] = np.real(res["A_per_layer"])
-
+                for i3, _ in enumerate(thetas):
+                    R_loop[:, i3] = R_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
+                    T_loop[:, i3] = T_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
+                    Alayer_loop[i3, :, :] = A_per_layer_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
                     if profile:
-                        Aprof_loop[i3, :, :, :] = np.real(res["profile_coeff"])
+                        Aprof_loop[i3, :, :, :] = profile_coeff_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:,:]
 
                 # sometimes get very small negative values (like -1e-20)
                 R_loop[R_loop < 0] = 0
