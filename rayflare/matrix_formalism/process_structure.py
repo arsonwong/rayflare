@@ -71,6 +71,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 (np.array(struct.widths) * 1e9).tolist()
             )  # convert m to nm
 
+    TMM_lookup_table = []
     for i1, struct in enumerate(SC):
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
@@ -91,7 +92,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
                 prof_layers = struct.prof_layers
 
-                make_TMM_lookuptable(
+                # takes 0.098619s
+                # takes 0.04754 without including unpol and not saving results
+                TMM_lookup_table.append(make_TMM_lookuptable(
                     struct.layers,
                     incidence,
                     substrate,
@@ -103,8 +106,15 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     prof_layers,
                     [1, -1],
                     overwrite,
-                )
+                    include_unpol=False,
+                    save = False
+                ))
 
+        if len(TMM_lookup_table) < i1+1:
+            TMM_lookup_table.append(None)
+
+    stored_front_redistribution_matrices = []
+    stored_rear_redistribution_matrices = []
     for i1, struct in enumerate(SC):
         if isinstance(struct, Interface):
 
@@ -171,8 +181,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
                 for side in which_sides:
                     # only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
-
-                    TMM(
+                    allArrays, absArrays = TMM(
                         struct.layers,
                         incidence,
                         substrate,
@@ -183,9 +192,13 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         coherency_list=coherency_list,
                         prof_layers=prof_layers,
                         front_or_rear=side,
-                        save=True,
+                        save=False,
                         overwrite=overwrite,
                     )
+                    if side=="front":
+                        stored_front_redistribution_matrices.append([allArrays,absArrays])
+                    else:
+                        stored_rear_redistribution_matrices.append([allArrays,absArrays])
 
             if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
                 logger.info(f"Ray tracing with TMM lookup table for element {i1} in structure")
@@ -203,7 +216,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         side, i1, options["only_incidence_angle"]
                     )
 
-                    RT(
+                    # takes 0.374021s with save, 0.18945 without save
+                    allArrays, absArrays = RT(
                         group,
                         incidence,
                         substrate,
@@ -216,10 +230,15 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         prof,
                         only_incidence_angle,
                         layer_widths[i1],
-                        save=True,
+                        save=False,
                         overwrite=overwrite,
-                        analytical_approx = analytical_approx
+                        analytical_approx = analytical_approx,
+                        lookuptable=TMM_lookup_table[i1]
                     )
+                    if side=="front":
+                        stored_front_redistribution_matrices.append([allArrays,absArrays])
+                    else:
+                        stored_rear_redistribution_matrices.append([allArrays,absArrays])
 
             if struct.method == "RT_Fresnel" or struct.method == "RT_analytical_Fresnel":
                 logger.info(f"Ray tracing with Fresnel equations for element {i1} in structure")
@@ -273,3 +292,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         save=True,
                         overwrite=overwrite,
                     )
+        if len(stored_front_redistribution_matrices) < i1+1:
+            stored_front_redistribution_matrices.append(None)
+        if len(stored_rear_redistribution_matrices) < i1+1:
+            stored_rear_redistribution_matrices.append(None)
+
+    return [stored_front_redistribution_matrices, stored_rear_redistribution_matrices]

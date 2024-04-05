@@ -27,6 +27,8 @@ def make_TMM_lookuptable(
     prof_layers=None,
     sides=None,
     overwrite=False,
+    include_unpol = True,
+    save = True
 ):
     """
     Takes a layer stack and calculates and stores lookup tables for use with the ray-tracer.
@@ -143,6 +145,7 @@ def make_TMM_lookuptable(
         # doesn't matter, but it needs to be set to something. Larger value means we don't make extremely large arrays
         # no reason during the calculation
 
+        # takes 0.044s
         for i1, side in enumerate(sides):
             prof_layer_side = prof_layer_list[i1]
             R_loop = np.empty((len(wavelengths), n_angles))
@@ -205,9 +208,12 @@ def make_TMM_lookuptable(
         else:
             allres = xr.merge([R, T, Alayer])
 
-        unpol = allres.reduce(np.mean, "pol").assign_coords(pol="u").expand_dims("pol")
-        allres = allres.merge(unpol)
-
-        allres.to_netcdf(savepath)
+        if include_unpol:
+            unpol = allres.reduce(np.mean, "pol").assign_coords(pol="u").expand_dims("pol")
+            #takes 0.028s
+            allres = allres.merge(unpol)
+        if save:
+            # takes 0.021s
+            allres.to_netcdf(savepath)
 
     return allres

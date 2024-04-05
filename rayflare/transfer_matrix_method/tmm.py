@@ -8,6 +8,8 @@
 import numpy as np
 import xarray as xr
 from sparse import COO, save_npz, stack
+import time
+from joblib import Parallel, delayed
 
 from solcore.absorption_calculator import tmm_core_vec as tmm
 from solcore.absorption_calculator.tmm_core_vec import coh_tmm
@@ -16,6 +18,19 @@ from solcore.absorption_calculator import OptiStack
 from rayflare.angles import make_angle_vector, fold_phi
 from rayflare.utilities import get_matrices_or_paths, get_wavelength
 
+def make_matrix_J(i1, N, wavelengths, angle_vector, bin_out_r, output_R, output_Alayer, bin_out_t, output_T):
+    fullmat_part = np.zeros((len(wavelengths), len(angle_vector)))
+    index = angle_vector[i1,0]
+    fullmat_part[:,bin_out_r[i1]] = output_R[:,index]
+    A_mat_part = output_Alayer[:,index,:]
+    non_nan_indices = np.where(~np.isnan(bin_out_t[:,i1]))
+    if non_nan_indices[0].size > 0:
+        # for j1, _ in enumerate(non_nan_indices[0]):
+        #     fullmat_part[non_nan_indices[0][j1],bin_out_t[non_nan_indices[0][j1],i1]] = output_T[non_nan_indices[0][j1],index]
+        fullmat_part[(non_nan_indices[0],bin_out_t[non_nan_indices[0],i1])] = output_T[non_nan_indices[0],index]
+    fullmat_part = COO.from_numpy(fullmat_part)
+    A_mat_part = COO.from_numpy(A_mat_part)
+    return fullmat_part, A_mat_part
 
 def TMM(
     layers,
@@ -140,18 +155,19 @@ def TMM(
         return path_or_mats
 
     else:
-
         get_wavelength(options)
         wavelengths = options["wavelength"]
 
         theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
 
-        theta_intv, phi_intv, angle_vector = make_angle_vector(
+        theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index = make_angle_vector(
             options["n_theta_bins"],
             options["phi_symmetry"],
             options["c_azimuth"],
             theta_spacing,
+            output_N_azimuths=True
         )
+
         angles_in = angle_vector[: int(len(angle_vector) / 2), :]
         thetas = np.unique(angles_in[:, 1])
 
@@ -231,13 +247,6 @@ def TMM(
             name="Alayer",
         )
 
-        theta_t = xr.DataArray(
-            np.empty((len(pols), len(wavelengths), n_angles)),
-            dims=["pol", "wl", "angle"],
-            coords={"pol": pols, "wl": wavelengths, "angle": thetas},
-            name="theta_t",
-        )
-
         if profile:
             Aprof = xr.DataArray(
                 np.empty((len(pols), n_angles, len(wavelengths), len(dist))),
@@ -249,7 +258,6 @@ def TMM(
         R_loop = np.empty((len(wavelengths), n_angles))
         T_loop = np.empty((len(wavelengths), n_angles))
         Alayer_loop = np.empty((n_angles, len(wavelengths), n_layers))
-        th_t_loop = np.empty((len(wavelengths), n_angles))
 
         if profile:
             Aprof_loop = np.empty((n_angles, len(wavelengths), len(dist)))
@@ -264,21 +272,28 @@ def TMM(
 
         for pol in pols:
 
-            for i3, theta in enumerate(thetas):
+            pass_options["pol"] = pol
+            pass_options["thetas_in"] = thetas
 
-                pass_options["pol"] = pol
-                pass_options["theta_in"] = theta
+            res = tmm_struct.calculate(
+                pass_options, profile=profile, layers=prof_layers, dist=dist
+            )
 
-                res = tmm_struct.calculate(
-                    pass_options, profile=profile, layers=prof_layers, dist=dist
-                )
+            R_result = np.real(res["R"])
+            T_result = np.real(res["T"])
+            A_per_layer_result = np.real(res["A_per_layer"])
+            if profile:
+                profile_result = np.real(res["profile"])
 
-                R_loop[:, i3] = np.real(res["R"])
-                T_loop[:, i3] = np.real(res["T"])
-                Alayer_loop[i3, :, :] = np.real(res["A_per_layer"])
-
+            for i3, _ in enumerate(thetas):
+                R_loop[:, i3] = R_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
+                T_loop[:, i3] = T_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
+                Alayer_loop[i3, :, :] = A_per_layer_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
                 if profile:
-                    Aprof_loop[i3, :, :] = res["profile"]
+                    Aprof_loop[i3, :, :] = profile_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
+
+            if profile:
+                Aprof_loop[i3, :, :] = res["profile"]
 
             # sometimes get very small negative values (like -1e-20)
             R_loop[R_loop < 0] = 0
@@ -297,7 +312,6 @@ def TMM(
             R.loc[dict(pol=pol)] = R_loop
             T.loc[dict(pol=pol)] = T_loop
             Alayer.loc[dict(pol=pol)] = Alayer_loop
-            theta_t.loc[dict(pol=pol)] = th_t_loop
 
             if profile:
                 Aprof.loc[dict(pol=pol)] = Aprof_loop
@@ -316,35 +330,92 @@ def TMM(
             )
 
         # populate matrices
-        if front_or_rear == "front":
-
-            angle_vector_th = angle_vector[: int(len(angle_vector) / 2), 1]
-            angle_vector_phi = angle_vector[: int(len(angle_vector) / 2), 2]
-
-            phis_out = fold_phi(angle_vector_phi + np.pi, options["phi_symmetry"])
-            theta_lookup = angles_in[:, 1]
-            quadrant = np.pi
-
+        if options["pol"] == "u":
+            output_R = 0.5*(R.loc[dict(pol='s')]+R.loc[dict(pol='p')]).values
+            output_T = 0.5*(T.loc[dict(pol='s')]+T.loc[dict(pol='p')]).values
+            output_Alayer = 0.5*(Alayer.loc[dict(pol='s')]+Alayer.loc[dict(pol='p')]).values
         else:
-            angle_vector_th = angle_vector[int(len(angle_vector) / 2) :, 1]
-            angle_vector_phi = angle_vector[int(len(angle_vector) / 2) :, 2]
+            output_R = R.loc[dict(pol=options["pol"])].values
+            output_T = T.loc[dict(pol=options["pol"])].values
+            output_Alayer = Alayer.loc[dict(pol=options["pol"])].values
 
-            phis_out = fold_phi(angle_vector_phi + np.pi, options["phi_symmetry"])
-            theta_lookup = angles_in[:, 1][::-1]
-            quadrant = 0
 
-        phis_out[phis_out == 0] = 1e-10
 
-        theta_bins_in = np.digitize(angle_vector_th, theta_intv, right=True) - 1
+        # new implementation
 
-        mats = [make_matrix_wl(wl) for wl in wavelengths]
 
+        phi_sym = options["phi_symmetry"]
+        angle_vector_th = angles_in[:, 1]
+        angle_vector_phi = angles_in[:, 2]
+
+        n_ratio = inc.n(wavelengths)/trns.n(wavelengths)
+        sin_thetas = np.sin(angle_vector_th)
+        #if front: reflected is 0-90 degrees, transmitted is 90-180 degrees
+        thetas_out_t = np.pi - np.arcsin(np.outer(n_ratio,sin_thetas)) # shape wavelengths, thetas; =NaN if total internal reflection
+        phis_out_t = fold_phi(angle_vector_phi + np.pi, phi_sym)
+        phis_out_t = np.tile(phis_out_t, (len(wavelengths), 1))
+        non_nan_indices = np.where(~np.isnan(thetas_out_t))
+        thetas_out_r = angle_vector_th
+        phis_out_r = fold_phi(angle_vector_phi + np.pi, phi_sym)
+        if front_or_rear == "rear":
+            if non_nan_indices[0].size > 0:
+                thetas_out_t[non_nan_indices] = np.pi - thetas_out_t[non_nan_indices[0]]
+            thetas_out_r = np.pi - thetas_out_r
+
+        bin_out_t = -1*np.ones_like(thetas_out_t)
+        if non_nan_indices[0].size > 0:
+            binned_theta_out_t = np.digitize(thetas_out_t[non_nan_indices], theta_intv, right=True) - 1
+            unit_distance = phi_sym/N_azimuths[binned_theta_out_t]
+            phi_ind = phis_out_t[non_nan_indices]/unit_distance
+            bin_out_t[non_nan_indices] = theta_first_index[binned_theta_out_t] + phi_ind.astype(int)
+        bin_out_t = bin_out_t.astype(int)
+
+        binned_theta_out_r = np.digitize(thetas_out_r, theta_intv, right=True) - 1
+        unit_distance = phi_sym/N_azimuths[binned_theta_out_r]
+        phi_ind = phis_out_r/unit_distance
+        bin_out_r = theta_first_index[binned_theta_out_r] + phi_ind.astype(int)
+
+        # jobs:1, 0.0328s; 2, 0.0376s; 4, 0.035103s; 8, 0.0561s            
+        mats = Parallel(n_jobs=1)(
+                delayed(make_matrix_J)(i1, angles_in.shape[0], wavelengths, angle_vector.astype(int), bin_out_r, output_R, output_Alayer, bin_out_t, output_T)             
+                for i1 in range(angles_in.shape[0]))
         fullmat = stack([item[0] for item in mats])
         A_mat = stack([item[1] for item in mats])
+        fullmat = np.transpose(fullmat, (1, 2, 0)) #(338, 60, 676)-->(60, 676, 338)
+        A_mat = np.transpose(A_mat, (1, 2, 0)) #(338, 60, 1) --> (60, 1, 338)
+
+
+
+        # old implementation
+
+        # if front_or_rear == "front":
+
+        #     angle_vector_th = angle_vector[: int(len(angle_vector) / 2), 1]
+        #     angle_vector_phi = angle_vector[: int(len(angle_vector) / 2), 2]
+
+        #     phis_out = fold_phi(angle_vector_phi + np.pi, options["phi_symmetry"])
+        #     theta_lookup = angles_in[:, 1]
+        #     quadrant = np.pi
+
+        # else:
+        #     angle_vector_th = angle_vector[int(len(angle_vector) / 2) :, 1]
+        #     angle_vector_phi = angle_vector[int(len(angle_vector) / 2) :, 2]
+
+        #     phis_out = fold_phi(angle_vector_phi + np.pi, options["phi_symmetry"])
+        #     theta_lookup = angles_in[:, 1][::-1]
+        #     quadrant = 0
+
+        # phis_out[phis_out == 0] = 1e-10
+
+        # theta_bins_in = np.digitize(angle_vector_th, theta_intv, right=True) - 1
+
+        # mats = [make_matrix_wl(wl) for wl in wavelengths]
+
+        # fullmat = stack([item[0] for item in mats])
+        # A_mat = stack([item[1] for item in mats])
 
         if save:
-            save_npz(path_or_mats[0], fullmat)
-            save_npz(path_or_mats[1], A_mat)
+            print(fullmat)
 
         if profile:
             prof_mat = [make_prof_matrix_wl(wl) for wl in wavelengths]
@@ -355,7 +426,7 @@ def TMM(
                 dims=["wl", "global_index"],
                 coords={
                     "wl": wavelengths,
-                    "global_index": np.arange(0, len(theta_bins_in)),
+                    "global_index": np.arange(0, angles_in.shape[0]),
                 },
             )
             intgr.name = "intgr"

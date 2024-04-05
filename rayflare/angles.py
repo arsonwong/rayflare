@@ -12,14 +12,14 @@ import seaborn as sns
 import matplotlib as mpl
 
 
-def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin"):
+def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin", output_N_azimuths=False):
     """Makes the binning intervals & angle vector depending on the relevant options.
     :param n_angle_bins: number of bins per 90 degrees in the polar direction (theta)
     :param phi_sym: phi angle (in radians) for the rotational symmetry of the unit cell; e.g. for a square-based pyramid,
     pi/4
     :param c_azimuth: a number between 0 and 1 which determines how finely the space is discretized in the
     azimuthal direction. N_azimuth = c_azimuth*r where r is the index of the polar angle bin. N_azimuth is
-    rounded up to the nearest intergest if c_azimuth is not an integer.
+    rounded up to the nearest intergest if it is not an integer.
     :return theta_intv: edges of the theta (polar angle) bins
     :return phi_intv: list with the edges of the phi bins for every theta bin
     :return angle_vector: array where the first column is the r index (theta bin), the second column in
@@ -46,13 +46,17 @@ def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin"):
     phi_intv = []
     angle_vector = np.empty((0, 3))
 
+    N_azimuths = np.zeros((theta_middle.size),dtype=int)
+    theta_first_index = np.zeros((theta_middle.size),dtype=int)
     for i1, theta in enumerate(theta_middle):
         if theta > np.pi / 2:
             ind = len(theta_intv) - (i1 + 1)  # + 1 because Python is zero-indexed
         else:
             ind = i1 + 1
 
-        phi_intv.append(np.linspace(0, phi_sym, int(np.ceil(c_azimuth * ind) + 1)))
+        N_azimuths[i1] = int(np.ceil(c_azimuth * ind))
+        theta_first_index[i1] = angle_vector.shape[0]
+        phi_intv.append(np.linspace(0, phi_sym, N_azimuths[i1]+1))
         phi_middle = (phi_intv[i1][:-1] + phi_intv[i1][1:]) / 2
 
         angle_vector = np.append(
@@ -67,7 +71,10 @@ def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin"):
             axis=0,
         )
 
-    return theta_intv, phi_intv, angle_vector
+    if output_N_azimuths:
+        return theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index
+    else:
+        return theta_intv, phi_intv, angle_vector
 
 
 def fold_phi(phis, phi_sym):

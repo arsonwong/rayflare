@@ -86,13 +86,14 @@ back_surf = Interface("RT_TMM", layers=back_materials, texture=surf_pyr, name="S
 
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_pyr, name="SiN_TMM", coherent=True)
 
-SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=Ag)
+SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=Air)
 
 times = []
+# with saving: 1s, no saving: 0.65s
 for iter in range(4):
     t1 = time.time()
-    process_structure(SC, options)
-    results_RT = calculate_RAT(SC, options)
+    stored_redistribution_matrices = process_structure(SC, options)
+    results_RT = calculate_RAT(SC, options, stored_redistribution_matrices=stored_redistribution_matrices)
     times.append(time.time()-t1)
 
 RAT = results_RT[0]

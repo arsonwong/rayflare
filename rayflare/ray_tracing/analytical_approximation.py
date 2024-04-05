@@ -32,17 +32,24 @@ class Polarization:
     def __init__(self, s_vector, p_vector):
         self.s_vector = s_vector
         self.p_vector = p_vector
-    def getIntensity(self):
         if self.s_vector.ndim==1:
-            return self.s_vector[0]**2+self.s_vector[1]**2+self.s_vector[2]**2+self.p_vector[0]**2+self.p_vector[1]**2+self.p_vector[2]**2
+            self.s_vector = self.s_vector.reshape(1, -1)
+            self.p_vector = self.s_vector.reshape(1, -1)
+    def getIntensity(self):
         return self.s_vector[:,0]**2+self.s_vector[:,1]**2+self.s_vector[:,2]**2+self.p_vector[:,0]**2+self.p_vector[:,1]**2+self.p_vector[:,2]**2
 
 def make_arbitrary_perpendicular_direction(direction):
-    index_of_max_abs = np.argmax(np.abs(direction))
-    other_index = 0 if index_of_max_abs > 0 else 1
-    perpendicular_direction = np.copy(direction)
-    perpendicular_direction[other_index] = -direction[index_of_max_abs]
-    perpendicular_direction[index_of_max_abs] = direction[other_index]
+    if direction.ndim==1:
+        direction = direction.reshape(1, -1)
+    j = np.where(np.logical_or(direction[:,0]!=0,direction[:,1]!=0))
+    perpendicular_direction = np.zeros_like(direction)
+    perpendicular_direction[:,0] = 1.0
+    if j[0].size > 0:
+        perpendicular_direction[j[0],0] = direction[j[0],1]
+        perpendicular_direction[j[0],1] = -direction[j[0],0]
+    
+    if perpendicular_direction.shape[0]==1:
+        perpendicular_direction = perpendicular_direction.reshape(-1)
     return perpendicular_direction
 
 # this class additionally stores a ray's direction, as well as a lot more "metadata"
@@ -51,17 +58,20 @@ def make_arbitrary_perpendicular_direction(direction):
 # given its parent ray, its own direction, the plane that its parent scattered off of, 
 # and the resultant Rs, Rp or Ts, Tp
 class Ray:
-    def __init__(self, direction, probability=1.0, parent=None, angle_inc=None, scatter_plane_normal=None):
+    def __init__(self, direction, probability=1.0, parent=None, angle_inc=None, scatter_plane_normal=None, R_or_T_s=None, R_or_T_p=None, A_entry=None):
         self.direction = direction
-        self.probability = probability
+        self.normalized_probability = probability 
         self.angle_inc = angle_inc
         self.scatter_plane_normal = scatter_plane_normal
         self.parent = parent
-        self.transmitted_child = None
-        self.reflected_child = None
+        self.children = []
         self.polarization = None
         self.propagated = False
         self.memorized_items = []
+        self.R_or_T_s = R_or_T_s
+        self.R_or_T_p = R_or_T_p
+        self.A_entry = A_entry
+        self.probability = self.normalized_probability
         if parent is None: # first initial ray, then just make circular polarized
             self.propagated = True
             s_vector = make_arbitrary_perpendicular_direction(direction)
@@ -72,25 +82,12 @@ class Ray:
             p_vector /= (length_*np.sqrt(2.0))
             self.polarization = Polarization(s_vector, p_vector)
         if parent:
-            self.probability = self.probability*parent.probability
-
-    def turn_into_initial_ray(self):
-        self.angle_inc = None
-        self.parent = None
-        self.scatter_plane_normal=None
-        self.propagated = True
-        self.num_of_texture_scatter = 0
+            self.probability = self.normalized_probability*parent.probability
 
     def getIntensity(self):
         return self.probability*self.polarization.getIntensity()
-
-    def point_down(self):
-        if self.direction[2] > 0:
-            self.direction[2] *= -1.0
-            self.polarization.s_vector[2] *= -1.0
-            self.polarization.p_vector[2] *= -1.0
     
-    def propagate_R_or_T(self, R_or_T_s, R_or_T_p):
+    def propagate_R_or_T(self):
         assert(self.parent is not None and self.parent.propagated == True)
         self.propagated = True
         parent_s_vector = self.parent.polarization.s_vector
@@ -122,18 +119,21 @@ class Ray:
         else:
             s_component = s_component.T
         s_component = np.sqrt(s_component[:,0]**2+s_component[:,1]**2) 
-        s_component_after_scatter = s_component*np.sqrt(R_or_T_s) # R_s can be a vector of many wavelengths
+        s_component_after_scatter = s_component*np.sqrt(self.R_or_T_s) # R_s can be a vector of many wavelengths
         p_component = np.array([np.dot(parent_s_vector, old_p_direction), np.dot(parent_p_vector, old_p_direction)])
         if np.ndim(p_component) == 1:
             p_component = p_component.reshape(1,-1)
         else:
             p_component = p_component.T
         p_component = np.sqrt(p_component[:,0]**2+p_component[:,1]**2) 
-        p_component_after_scatter = p_component*np.sqrt(R_or_T_p) # R_p can be a vector of many wavelengths
+        p_component_after_scatter = p_component*np.sqrt(self.R_or_T_p) # R_p can be a vector of many wavelengths
         s_vector = np.outer(s_component_after_scatter, new_s_direction) 
         p_vector = np.outer(p_component_after_scatter, new_p_direction)
         self.polarization = Polarization(s_vector, p_vector)
-        return s_component, p_component  # this is for reference, aid in other calculations if needed
+        A_mat_comp = None
+        if self.A_entry is not None:
+            A_mat_comp = self.normalized_probability*self.parent.getIntensity()*(s_component[0]*self.A_entry[0] + p_component[0]*self.A_entry[1])
+        return A_mat_comp
 
 def get_ray_directions(ray_queue):
     directions = []
@@ -286,6 +286,8 @@ def RT_analytical(
     phi_sym,
     theta_intv,
     phi_intv,
+    N_azimuths,
+    theta_first_index,
     angle_vector,
     Fr_or_TMM,
     n_abs_layers,
@@ -311,8 +313,13 @@ def RT_analytical(
 
     relevant_face = np.arange(how_many_faces)
 
+    # takes 0.0042s to run whole thing
+    # after vectorizing, takes 0.0013838 to run whole thing
+    # take out propagate R or T, calc intensity: drops down to 0.000745s
+    # so the ray trace is super fast but propgation is very slow.....maybe need to batch that up
     # define the incident ray
-    ray_queue = [Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)]))]
+    first_ray = Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)]))
+    ray_queue = [first_ray]
 
     # do the analytical ray tracing here
     scattered_rays = []
@@ -336,7 +343,7 @@ def RT_analytical(
             reflected_directions = ray_directions - 2 * normal_component
             reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
             # for now, approximate long wavelength limit for n0, n1, so the refracted angle is the same for all wavelengths considered
-            tr_par = (n0[-1] / n1[-1]) * (ray_directions - normal_component)
+            tr_par = (np.real(n0[-1]) / np.real(n1[-1])) * (ray_directions - normal_component)
             tr_par_length = np.linalg.norm(tr_par,axis=1)
             tr_perp = -np.sqrt(1 - tr_par_length ** 2)[:, None] * normals[i]
 
@@ -371,27 +378,91 @@ def RT_analytical(
                         Ap_per_layer = A_entry[1]
 
                     reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i])
-                    s_component, p_component = reflected_ray.propagate_R_or_T(Rs, Rp)
+                                        angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Rp, R_or_T_s=Rs, A_entry=A_entry)
+                    # s_component, p_component = reflected_ray.propagate_R_or_T()
                     
-                    if s_component.shape[0]==1:
-                        A_mat += ray_queue[j].getIntensity()*(s_component[0]*As_per_layer + p_component[0]*Ap_per_layer)
-                    else:
-                        A_mat += ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
-                    ray_queue[j].reflected_child = reflected_ray
+                    # if s_component.shape[0]==1:
+                    #     A_mat += hit_prob[j][i]*ray_queue[j].getIntensity()*(s_component[0]*As_per_layer + p_component[0]*Ap_per_layer)
+                    # else:
+                    #     A_mat += hit_prob[j][i]*ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
+                    ray_queue[j].children.append(reflected_ray)
                     if np.sign(reflected_directions[j][2])==1:
                         scattered_rays.append(reflected_ray)
                     else:
                         ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
                         transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i])
-                        transmitted_ray.propagate_R_or_T(Ts, Tp)
-                        ray_queue[j].transmitted_child = transmitted_ray
+                                        angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Tp, R_or_T_s=Ts)
+                        # transmitted_ray.propagate_R_or_T()
+                        ray_queue[j].children.append(transmitted_ray)
                         scattered_rays.append(transmitted_ray)
 
         ray_queue = ray_queue[num_of_rays:]
 
+    ray_queue = [first_ray]
+    for iter in range(max_interactions):
+        num_of_rays = len(ray_queue)
+        if num_of_rays==0:
+            break
+        if iter>0:
+            # how to propagate ray queue:
+            all_parent_direction = []
+            all_direction = []
+            all_scatter_plane_normal = []
+            all_parent_s_vector = []
+            all_parent_p_vector = []
+            all_R_or_T_s = []
+            all_R_or_T_p = []
+            for j in range(num_of_rays):
+                all_direction.append(ray_queue[j].direction)
+                all_parent_direction.append(ray_queue[j].parent.direction)
+                all_scatter_plane_normal.append(ray_queue[j].scatter_plane_normal)
+                all_parent_s_vector.append(ray_queue[j].parent.polarization.s_vector)
+                all_parent_p_vector.append(ray_queue[j].parent.polarization.p_vector)
+                all_R_or_T_s.append(ray_queue[j].R_or_T_s)
+                all_R_or_T_p.append(ray_queue[j].R_or_T_p)
+            all_parent_direction = np.array(all_parent_direction)
+            all_direction =  np.array(all_direction)
+            all_scatter_plane_normal =  np.array(all_scatter_plane_normal)
+            all_parent_s_vector =  np.array(all_parent_s_vector)
+            all_parent_p_vector =  np.array(all_parent_p_vector)
+            all_R_or_T_s = np.array(all_R_or_T_s)
+            all_R_or_T_p = np.array(all_R_or_T_s)
+
+            new_s_direction = np.cross(all_parent_direction, all_scatter_plane_normal)
+            length_ = np.sqrt(np.sum(new_s_direction**2,axis=1))
+            indices = np.where(length_==0)
+            if indices[0].size > 0:
+                new_s_direction[indices] = make_arbitrary_perpendicular_direction(all_parent_direction[indices])
+                length_[indices] = np.sqrt(np.sum(new_s_direction[indices]**2,axis=1))
+            new_s_direction /= length_[:,None]  # rays, 3
+            new_p_direction = np.cross(all_direction, new_s_direction)
+            length_ = np.sqrt(np.sum(new_p_direction**2,axis=1))
+            new_p_direction /= length_[:,None] # rays, 3
+            old_p_direction = np.cross(all_parent_direction, new_s_direction)
+            length_ = np.sqrt(np.sum(old_p_direction**2,axis=1))
+            old_p_direction /= length_[:,None]
+            new_s_direction_expanded = np.repeat(new_s_direction[:, np.newaxis, :], all_parent_s_vector.shape[1], axis=1) # rays, wavelength, 3
+            old_p_direction = np.repeat(old_p_direction[:, np.newaxis, :], all_parent_s_vector.shape[1], axis=1)
+            s_component1 = np.sum(all_parent_s_vector*new_s_direction_expanded,axis=-1) # rays, wavelength
+            s_component2 = np.sum(all_parent_p_vector*new_s_direction_expanded,axis=-1)
+            s_component = np.sqrt(s_component1**2+s_component2**2) 
+            p_component1 = np.sum(all_parent_s_vector*old_p_direction,axis=-1) # rays, wavelength
+            p_component2 = np.sum(all_parent_p_vector*old_p_direction,axis=-1)
+            p_component = np.sqrt(p_component1**2+p_component2**2) 
+            s_component_after_scatter = s_component*np.sqrt(all_R_or_T_s) # rays, wavelength
+            p_component_after_scatter = p_component*np.sqrt(all_R_or_T_p) # rays, wavelength
+            s_vector = s_component_after_scatter[:,:,np.newaxis]*new_s_direction[:,np.newaxis,:] # rays,wavelength,3
+            p_vector = p_component_after_scatter[:,:,np.newaxis]*new_p_direction[:,np.newaxis,:]
+            all_parent_intensity = np.sum(all_parent_s_vector**2,axis=-1)+np.sum(all_parent_p_vector**2,axis=-1)
+            for j in range(num_of_rays):
+                ray_queue[j].polarization = Polarization(s_vector[j], p_vector[j])
+                if ray_queue[j].A_entry is not None:
+                    A_mat += ray_queue[j].normalized_probability*all_parent_intensity[j][:,None]*(s_component[j][:,None]*ray_queue[j].A_entry[0]+p_component[j][:,None]*ray_queue[j].A_entry[1])
+
+        for j in range(num_of_rays):
+            ray_queue.extend(ray_queue[j].children)
+        ray_queue = ray_queue[num_of_rays:]
 
     thetas_local_incidence = np.abs(np.array(thetas_local_incidence))
 
@@ -399,12 +470,12 @@ def RT_analytical(
     scattered_ray_directions = get_ray_directions(scattered_rays)
     horizontal_comp = np.sqrt(scattered_ray_directions[:,0]**2+scattered_ray_directions[:,1]**2)
     horizontal_comp[horizontal_comp==0] = 1.0 # just to avoid division by zero later
-    thetas_out = np.arccos(scattered_ray_directions[:,2])
+    thetas_out = np.arccos(scattered_ray_directions[:,2]) #reflected is 0-90 degrees, transmitted is 90-180 degrees
     phis_out = np.arccos(scattered_ray_directions[:,1]/horizontal_comp)
 
     phis_out = fold_phi(phis_out, phi_sym)
-    phi_in = fold_phi(phi_in, phi_sym)
 
+    # this is due to the weird nature that R, T matrices are extracted from fullmat which is different for "front" and "rear"
     if side == -1:
         thetas_out = np.pi - thetas_out
 
@@ -413,22 +484,43 @@ def RT_analytical(
         theta_intv = np.append(theta_intv, 11)
         phi_intv = phi_intv + [np.array([0])]
 
-    # thetas_out = thetas_out[:, np.newaxis]
-    # phis_out = phis_out[:, np.newaxis]
     binned_theta_out = np.digitize(thetas_out, theta_intv, right=True) - 1
 
-    phis_out = xr.DataArray(
-        phis_out,
-        coords={"theta_bin": (["angle_in"], binned_theta_out)},
-        dims=["angle_in"],
-    )
+    unit_distance = phi_sym/N_azimuths[binned_theta_out]
+    phi_ind = phis_out/unit_distance
+    bin_out = theta_first_index[binned_theta_out] + phi_ind.astype(int)
 
-    # this is super slow
-    bin_out = (
-        phis_out.groupby("theta_bin")
-        .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
-        .data
-    )
+    # phis_out = xr.DataArray(
+    #     phis_out,
+    #     coords={"theta_bin": (["angle_in"], binned_theta_out)},
+    #     dims=["angle_in"],
+    # )
+
+    # # this is super slow
+    # bin_out = (
+    #     phis_out.groupby("theta_bin")
+    #     .map(overall_bin, args=(phi_intv, angle_vector[:, 0]))
+    #     .data
+    # )
+
+    # if not np.array_equal(bin_out,bin_out1):
+    #     print("haha")
+    #     print(bin_out.shape)
+    #     print(bin_out1.shape)
+    #     print(bin_out[0])
+    #     print(bin_out1[0])
+    #     compare = np.column_stack((bin_out, bin_out1))
+    #     print("kaka")
+    #     print(compare)
+    #     print("gaga")
+    #     for i5 in range(bin_out.size):
+    #         if bin_out[i5] != bin_out1[i5]:
+    #             print(thetas_out[i5])
+    #             print(phis_out[i5])
+    #             print(angle_vector[bin_out[i5],:])
+    #             print(angle_vector[bin_out1[i5],:])
+    #             assert(1==0)
+    #     assert(1==0)
 
     out_mat = np.zeros((len(wl), len(angle_vector))) 
     for l1 in range(len(thetas_out)):

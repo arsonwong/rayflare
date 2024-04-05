@@ -46,7 +46,8 @@ def RT(
     widths=None,
     save=True,
     overwrite=False,
-    analytical_approx = False
+    analytical_approx = False,
+    lookuptable = None
 ):
     """Calculates the reflection/transmission and absorption redistribution matrices for an interface using
     either a previously calculated TMM lookup table or the Fresnel equations.
@@ -115,18 +116,20 @@ def RT(
         else:
             side = -1
 
-        if Fr_or_TMM == 1:
-            lookuptable = xr.open_dataset(os.path.join(structpath, surf_name + ".nc"))
+        if lookuptable is None:
+            if Fr_or_TMM == 1:
+                lookuptable = xr.open_dataset(os.path.join(structpath, surf_name + ".nc"))
+            else:
+                lookuptable = None
+        if lookuptable is not None:
             if front_or_rear == "rear":
                 # side gets flipped here
                 lookuptable = lookuptable.assign_coords(side=np.flip(lookuptable.side))
-        else:
-            lookuptable = None
 
         theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
 
-        theta_intv, phi_intv, angle_vector = make_angle_vector(
-            n_theta_bins, phi_sym, c_az, theta_spacing
+        theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index = make_angle_vector(
+            n_theta_bins, phi_sym, c_az, theta_spacing, output_N_azimuths=True
         )
 
         if analytical_approx:
@@ -273,9 +276,31 @@ def RT(
             A_table = np.transpose(A_table,(2,0,1,3))
             A_table[A_table<0] = 0.0
 
+            # RT_analytical(
+            #         angles_in[0],
+            #         wavelengths,
+            #         n0,
+            #         n1,
+            #         10,
+            #         surfaces[0],
+            #         phi_sym,
+            #         theta_intv,
+            #         phi_intv,
+            #         N_azimuths,
+            #         theta_first_index,
+            #         angle_vector,
+            #         Fr_or_TMM,
+            #         n_absorbing_layers,
+            #         radian_table,
+            #         R_T_table,
+            #         A_table,
+            #         side,
+            #     )
+
             # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
             # multiprocessing not working, for some reason
-            allres = Parallel(n_jobs=8)(
+            # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s
+            allres = Parallel(n_jobs=4)(
                 delayed(RT_analytical)(
                     angles_in[i1],
                     wavelengths,
@@ -286,6 +311,8 @@ def RT(
                     phi_sym,
                     theta_intv,
                     phi_intv,
+                    N_azimuths,
+                    theta_first_index,
                     angle_vector,
                     Fr_or_TMM,
                     n_absorbing_layers,
