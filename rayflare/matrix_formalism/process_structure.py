@@ -15,8 +15,23 @@ from rayflare.rigorous_coupled_wave_analysis import RCWA
 from rayflare.transfer_matrix_method import TMM
 from rayflare.angles import make_angle_vector
 from rayflare.matrix_formalism.ideal_cases import lambertian_matrix, mirror_matrix
-from rayflare.utilities import get_savepath
+from rayflare.utilities import get_savepath, get_wavelength
 from rayflare import logger
+from sparse import COO, stack
+
+def make_D(alphas, thick, thetas):
+    """
+    Makes the bulk absorption vector for the bulk material.
+
+    :param alphas: absorption coefficient (m^{-1})
+    :param thick: thickness of the slab in m
+    :param thetas: incident thetas in angle_vector (second column)
+
+    :return:
+    """
+    diag = np.exp(-alphas[:, None] * thick / abs(np.cos(thetas[None, :])))
+    D_1 = stack([COO.from_numpy(np.diag(x)) for x in diag])
+    return D_1
 
 def process_structure(SC, options, save_location="default", overwrite=False):
     """
@@ -71,7 +86,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 (np.array(struct.widths) * 1e9).tolist()
             )  # convert m to nm
 
-    TMM_lookup_table = []
+    SC.TMM_lookup_table = []
     for i1, struct in enumerate(SC):
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
@@ -94,7 +109,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
                 # takes 0.098619s
                 # takes 0.04754 without including unpol and not saving results
-                TMM_lookup_table.append(make_TMM_lookuptable(
+                SC.TMM_lookup_table.append(make_TMM_lookuptable(
                     struct.layers,
                     incidence,
                     substrate,
@@ -110,13 +125,31 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     save = False
                 ))
 
-        if len(TMM_lookup_table) < i1+1:
-            TMM_lookup_table.append(None)
+        if len(SC.TMM_lookup_table) < i1+1:
+            SC.TMM_lookup_table.append(None)
 
     stored_front_redistribution_matrices = []
     stored_rear_redistribution_matrices = []
+
+    theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
+
+    theta_intv, phi_intv, angle_vector = make_angle_vector(
+        options["n_theta_bins"],
+        options["phi_symmetry"],
+        options["c_azimuth"],
+        theta_spacing,
+    )
+    
     for i1, struct in enumerate(SC):
+        if isinstance(struct, BulkLayer):
+            SC.bulkIndices.append(i1)
+            get_wavelength(options)
+            n_a_in = int(len(angle_vector) / 2)
+            thetas = angle_vector[:n_a_in, 1]
+            stored_front_redistribution_matrices.append(make_D(struct.material.alpha(options["wavelength"]), struct.width, thetas))
+
         if isinstance(struct, Interface):
+            SC.interfaceIndices.append(i1)
 
             if i1 == 0:
                 incidence = SC.incidence
@@ -131,14 +164,6 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 which_sides = ["front", "rear"]
 
             if struct.method == "Mirror":
-                theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
-
-                theta_intv, phi_intv, angle_vector = make_angle_vector(
-                    options["n_theta_bins"],
-                    options["phi_symmetry"],
-                    options["c_azimuth"],
-                    theta_spacing,
-                )
                 mirror_matrix(
                     angle_vector,
                     theta_intv,
@@ -152,14 +177,6 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 )
 
             if struct.method == "Lambertian":
-                theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
-
-                theta_intv, _, angle_vector = make_angle_vector(
-                    options["n_theta_bins"],
-                    options["phi_symmetry"],
-                    options["c_azimuth"],
-                    theta_spacing,
-                )
 
                 # assuming this is a Lambertian reflector right now
                 lambertian_matrix(
@@ -233,7 +250,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         save=False,
                         overwrite=overwrite,
                         analytical_approx = analytical_approx,
-                        lookuptable=TMM_lookup_table[i1]
+                        lookuptable=SC.TMM_lookup_table[i1]
                     )
                     if side=="front":
                         stored_front_redistribution_matrices.append([allArrays,absArrays])
@@ -297,4 +314,4 @@ def process_structure(SC, options, save_location="default", overwrite=False):
         if len(stored_rear_redistribution_matrices) < i1+1:
             stored_rear_redistribution_matrices.append(None)
 
-    return [stored_front_redistribution_matrices, stored_rear_redistribution_matrices]
+    SC.stored_redistribution_matrices = [stored_front_redistribution_matrices, stored_rear_redistribution_matrices]

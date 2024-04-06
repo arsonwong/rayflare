@@ -17,7 +17,7 @@ from rayflare.utilities import get_savepath, get_wavelength
 
 from rayflare import logger
 
-def calculate_RAT(SC, options, save_location="default", stored_redistribution_matrices=None):
+def calculate_RAT(SC, options, save_location="default"):
     """
     After the list of Interface and BulkLayers has been processed by process_structure,
     this function calculates the R, A and T by calling matrix_multiplication.
@@ -70,7 +70,7 @@ def calculate_RAT(SC, options, save_location="default", stored_redistribution_ma
             calc_prof_list.append(struct.prof_layers)
 
     results = matrix_multiplication(
-        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices
+        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices
     )
 
     return results
@@ -202,7 +202,7 @@ def bulk_profile_calc(v_1, v_2, alphas, thetas, d, depths, A):
 
 
 def load_redistribution_matrices(
-    results_path, n_a_in, n_interfaces, layer_names, front_or_rear, calc_prof_list=None, stored_redistribution_matrices=None
+    results_path, n_a_in, n_interfaces, layer_names, front_or_rear, calc_prof_list=None, stored_redistribution_matrices=None, interfaceIndices=None
 ):
 
     R = []
@@ -220,9 +220,9 @@ def load_redistribution_matrices(
     side_code = {'front': 0, 'rear': 1}
     for i1 in range(n_max):
 
-        if (stored_redistribution_matrices is not None) and (stored_redistribution_matrices[side_code[front_or_rear]][i1] is not None):
-            fullmat = stored_redistribution_matrices[side_code[front_or_rear]][i1][0]
-            absmat = stored_redistribution_matrices[side_code[front_or_rear]][i1][1]
+        if (stored_redistribution_matrices is not None) and (stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]] is not None):
+            fullmat = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][0]
+            absmat = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][1]
 
             mat_path = os.path.join(
                 results_path, layer_names[i1] + front_or_rear + "RT.npz"
@@ -296,7 +296,7 @@ def append_per_pass_info(i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab):
 
 
 def matrix_multiplication(
-    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None
+    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None, bulkIndices=None, interfaceIndices=None
 ):
     """
 
@@ -361,7 +361,8 @@ def matrix_multiplication(
     depths_bulk = []
     for i1 in range(n_bulks):
         D.append(
-            make_D(bulk_mats[i1].alpha(options["wavelength"]), bulk_thick[i1], thetas)
+            # make_D(bulk_mats[i1].alpha(options['wavelength']), bulk_thick[i1], thetas)
+            stored_redistribution_matrices[0][bulkIndices[i1]]
         )
 
         if options["bulk_profile"]:
@@ -372,11 +373,11 @@ def matrix_multiplication(
     # load redistribution matrices
 
     Rf, Tf, Af, Pf, If = load_redistribution_matrices(
-        results_path, n_a_in, n_interfaces, layer_names, "front", calc_prof_list, stored_redistribution_matrices
+        results_path, n_a_in, n_interfaces, layer_names, "front", calc_prof_list, stored_redistribution_matrices, interfaceIndices
     )
 
     Rb, Tb, Ab, Pb, Ib = load_redistribution_matrices(
-        results_path, n_a_in, n_interfaces, layer_names, "rear", calc_prof_list, stored_redistribution_matrices
+        results_path, n_a_in, n_interfaces, layer_names, "rear", calc_prof_list, stored_redistribution_matrices, interfaceIndices
     )
 
     len_calcs = np.array([len(x) if x is not None else 0 for x in calc_prof_list])

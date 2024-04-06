@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
+sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
 
 from solcore.structure import Layer
 from solcore import material
@@ -47,6 +47,11 @@ options.n_jobs = -3
 options.depth_spacing_bulk = 1e-7
 
 # set up Solcore materials
+# ITO = material("ITO")()
+# print(ITO.n_path)
+# ITO.n_path = "blahblah"
+# ITO.load_n_data()
+# assert(1==0)
 Ge = material("Ge")()
 Si = material("Si")()
 GaAs = material("GaAs")()
@@ -90,10 +95,12 @@ SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, trans
 
 times = []
 # with saving: 1s, no saving: 0.65s
+# on laptop no saving: 1.40s; of which calculate_RAT takes up 0.33s
 for iter in range(4):
+    # t1 = time.time()
+    process_structure(SC, options)
     t1 = time.time()
-    stored_redistribution_matrices = process_structure(SC, options)
-    results_RT = calculate_RAT(SC, options, stored_redistribution_matrices=stored_redistribution_matrices)
+    results_RT = calculate_RAT(SC, options)
     times.append(time.time()-t1)
 
 RAT = results_RT[0]

@@ -15,6 +15,11 @@ class Structure(list):
         super(Structure, self).__init__(*args)
         self.__dict__.update(kwargs)
         self.labels = [None] * len(self)
+        self.TMM_lookup_table = []
+        self.stored_redistribution_matrices = []
+        self.bulkIndices = []
+        self.interfaceIndices = []
+
 
     # def append(self, new_layer, layer_label=None, repeats=1):
     #     # Pass the arguments to the superclass for extending
