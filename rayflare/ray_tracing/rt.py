@@ -47,7 +47,8 @@ def RT(
     save=True,
     overwrite=False,
     analytical_approx = False,
-    lookuptable = None
+    lookuptable = None,
+    width_differentials = None
 ):
     """Calculates the reflection/transmission and absorption redistribution matrices for an interface using
     either a previously calculated TMM lookup table or the Fresnel equations.
@@ -276,26 +277,12 @@ def RT(
             A_table = np.transpose(A_table,(2,0,1,3))
             A_table[A_table<0] = 0.0
 
-            # RT_analytical(
-            #         angles_in[0],
-            #         wavelengths,
-            #         n0,
-            #         n1,
-            #         10,
-            #         surfaces[0],
-            #         phi_sym,
-            #         theta_intv,
-            #         phi_intv,
-            #         N_azimuths,
-            #         theta_first_index,
-            #         angle_vector,
-            #         Fr_or_TMM,
-            #         n_absorbing_layers,
-            #         radian_table,
-            #         R_T_table,
-            #         A_table,
-            #         side,
-            #     )
+            width_differentials_num = 0
+            if width_differentials is not None:
+                for d in width_differentials:
+                    if d is not None:
+                        width_differentials_num += 1
+            stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
 
             # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
             # multiprocessing not working, for some reason
@@ -303,7 +290,7 @@ def RT(
             allres = Parallel(n_jobs=4)(
                 delayed(RT_analytical)(
                     angles_in[i1],
-                    wavelengths,
+                    stacked_wavelengths,
                     n0,
                     n1,
                     10,

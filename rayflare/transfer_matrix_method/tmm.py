@@ -19,7 +19,7 @@ from rayflare.angles import make_angle_vector, fold_phi
 from rayflare.utilities import get_matrices_or_paths, get_wavelength
 
 def make_matrix_J(i1, N, wavelengths, angle_vector, bin_out_r, output_R, output_Alayer, bin_out_t, output_T):
-    fullmat_part = np.zeros((len(wavelengths), len(angle_vector)))
+    fullmat_part = np.zeros((output_R.shape[0], len(angle_vector)))
     index = angle_vector[i1,0]
     fullmat_part[:,bin_out_r[i1]] = output_R[:,index]
     A_mat_part = output_Alayer[:,index,:]
@@ -45,6 +45,7 @@ def TMM(
     front_or_rear="front",
     save=True,
     overwrite=False,
+    width_differentials = None
 ):
     """
     Function which takes a layer stack and creates an angular redistribution matrix.
@@ -222,25 +223,33 @@ def TMM(
         else:
             pols = [options["pol"]]
 
+        width_differentials_num = 0
+        if width_differentials is not None:
+            for d in width_differentials:
+                if d is not None:
+                    width_differentials_num += 1
+        num_rows = len(wavelengths)*(width_differentials_num+1)
+        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
+
         R = xr.DataArray(
-            np.empty((len(pols), len(wavelengths), n_angles)),
+            np.empty((len(pols), num_rows, n_angles)),
             dims=["pol", "wl", "angle"],
-            coords={"pol": pols, "wl": wavelengths, "angle": thetas},
+            coords={"pol": pols, "wl": stacked_wavelengths, "angle": thetas},
             name="R",
         )
         T = xr.DataArray(
-            np.empty((len(pols), len(wavelengths), n_angles)),
+            np.empty((len(pols), num_rows, n_angles)),
             dims=["pol", "wl", "angle"],
-            coords={"pol": pols, "wl": wavelengths, "angle": thetas},
+            coords={"pol": pols, "wl": stacked_wavelengths, "angle": thetas},
             name="T",
         )
 
         Alayer = xr.DataArray(
-            np.empty((len(pols), n_angles, len(wavelengths), n_layers)),
+            np.empty((len(pols), n_angles, num_rows, n_layers)),
             dims=["pol", "angle", "wl", "layer"],
             coords={
                 "pol": pols,
-                "wl": wavelengths,
+                "wl": stacked_wavelengths,
                 "angle": thetas,
                 "layer": range(1, n_layers + 1),
             },
@@ -249,18 +258,18 @@ def TMM(
 
         if profile:
             Aprof = xr.DataArray(
-                np.empty((len(pols), n_angles, len(wavelengths), len(dist))),
+                np.empty((len(pols), n_angles, num_rows, len(dist))),
                 dims=["pol", "angle", "wl", "z"],
-                coords={"pol": pols, "wl": wavelengths, "angle": thetas, "z": dist},
+                coords={"pol": pols, "wl": stacked_wavelengths, "angle": thetas, "z": dist},
                 name="Aprof",
             )
 
-        R_loop = np.empty((len(wavelengths), n_angles))
-        T_loop = np.empty((len(wavelengths), n_angles))
-        Alayer_loop = np.empty((n_angles, len(wavelengths), n_layers))
+        R_loop = np.empty((num_rows, n_angles))
+        T_loop = np.empty((num_rows, n_angles))
+        Alayer_loop = np.empty((n_angles, num_rows, n_layers))
 
         if profile:
-            Aprof_loop = np.empty((n_angles, len(wavelengths), len(dist)))
+            Aprof_loop = np.empty((n_angles, num_rows, len(dist)))
 
         tmm_struct = tmm_structure(optlayers, incidence, transmission, False)
 
@@ -276,7 +285,7 @@ def TMM(
             pass_options["thetas_in"] = thetas
 
             res = tmm_struct.calculate(
-                pass_options, profile=profile, layers=prof_layers, dist=dist
+                pass_options, profile=profile, layers=prof_layers, dist=dist, width_differentials=width_differentials
             )
 
             R_result = np.real(res["R"])
@@ -285,12 +294,14 @@ def TMM(
             if profile:
                 profile_result = np.real(res["profile"])
 
-            for i3, _ in enumerate(thetas):
-                R_loop[:, i3] = R_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
-                T_loop[:, i3] = T_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
-                Alayer_loop[i3, :, :] = A_per_layer_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
-                if profile:
-                    Aprof_loop[i3, :, :] = profile_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
+            for i4 in range(width_differentials_num+1):
+                offset = i4*len(wavelengths)*len(thetas)
+                for i3, _ in enumerate(thetas):
+                    R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                    T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                    Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                    if profile:
+                        Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
 
             if profile:
                 Aprof_loop[i3, :, :] = res["profile"]
@@ -469,7 +480,7 @@ class tmm_structure:
         self.no_back_reflection = no_back_reflection
         self.width = np.sum(layer_stack.widths) / 1e9
 
-    def calculate(self, options, profile=False, layers=None, dist=None):
+    def calculate(self, options, profile=False, layers=None, dist=None, width_differentials=None):
         """ Calculates the reflected, absorbed and transmitted intensity of the structure for the wavelengths and angles
         defined.
 
@@ -688,6 +699,7 @@ class tmm_structure:
 
         n_list = layer_stack.get_indices(wavelength)
         d_list = layer_stack.get_widths()
+        # stack the angles and wavelengths
         if not isinstance(angles, np.ndarray):
             angles = np.array([angles])
         num_angles = angles.shape[0]
@@ -704,6 +716,8 @@ class tmm_structure:
                     d_list,
                     angles,
                     wavelength,
+                    width_differentials = width_differentials, 
+                    detailed = False
                 )
                 A_per_layer = tmm.absorp_in_each_layer(out)
                 output["R"] = out["R"]
@@ -745,6 +759,8 @@ class tmm_structure:
                     d_list,
                     angles,
                     wavelength,
+                    width_differentials = width_differentials,
+                    detailed = False
                 )
                 out_s = coh_tmm(
                     "s",
@@ -752,6 +768,8 @@ class tmm_structure:
                     d_list,
                     angles,
                     wavelength,
+                    width_differentials = width_differentials,
+                    detailed = False
                 )
                 A_per_layer_p = tmm.absorp_in_each_layer(out_p)
                 A_per_layer_s = tmm.absorp_in_each_layer(out_s)

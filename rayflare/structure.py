@@ -97,6 +97,7 @@ class Interface:
         self.materials = []
         self.n_depths = []
         self.widths = []
+        self.width_differentials = []
         self.coherent = coherent
 
         if layers is not None:

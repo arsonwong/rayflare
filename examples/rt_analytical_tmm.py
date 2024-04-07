@@ -86,20 +86,22 @@ front_surf = Interface(
 front_surf_pyr = Interface(
     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
 )
+front_surf_pyr.width_differentials = [front_surf_pyr.widths[0]*0.2] 
 
 back_surf = Interface("RT_TMM", layers=back_materials, texture=surf_pyr, name="SiN_RT_TMM", coherent=True)
 
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_pyr, name="SiN_TMM", coherent=True)
+back_surf_planar.width_differentials = [back_surf_planar.widths[0]*0.2] 
+
 
 SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=Air)
 
 times = []
 # with saving: 1s, no saving: 0.65s
-# on laptop no saving: 1.40s; of which calculate_RAT takes up 0.33s
+# on laptop no saving: 0.85s; of which calculate_RAT takes up 0.15s
 for iter in range(4):
-    # t1 = time.time()
-    process_structure(SC, options)
     t1 = time.time()
+    process_structure(SC, options, overwrite=True)
     results_RT = calculate_RAT(SC, options)
     times.append(time.time()-t1)
 

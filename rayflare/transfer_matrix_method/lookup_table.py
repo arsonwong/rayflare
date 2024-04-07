@@ -28,7 +28,8 @@ def make_TMM_lookuptable(
     sides=None,
     overwrite=False,
     include_unpol = True,
-    save = True
+    save = True,
+    width_differentials = None
 ):
     """
     Takes a layer stack and calculates and stores lookup tables for use with the ray-tracer.
@@ -87,35 +88,42 @@ def make_TMM_lookuptable(
         # can calculate by angle, already vectorized over wavelength
         pols = ["s", "p"]
 
+        width_differentials_num = 0
+        if width_differentials is not None:
+            for d in width_differentials:
+                if d is not None:
+                    width_differentials_num += 1
+        num_rows = len(wavelengths)*(width_differentials_num+1)
+        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
         R = xr.DataArray(
-            np.empty((2, 2, len(wavelengths), n_angles)),
+            np.empty((2, 2, num_rows, n_angles)),
             dims=["side", "pol", "wl", "angle"],
             coords={
                 "side": sides,
                 "pol": pols,
-                "wl": wavelengths * 1e9,
+                "wl": stacked_wavelengths * 1e9,
                 "angle": thetas,
             },
             name="R",
         )
         T = xr.DataArray(
-            np.empty((2, 2, len(wavelengths), n_angles)),
+            np.empty((2, 2, num_rows, n_angles)),
             dims=["side", "pol", "wl", "angle"],
             coords={
                 "side": sides,
                 "pol": pols,
-                "wl": wavelengths * 1e9,
+                "wl": stacked_wavelengths * 1e9,
                 "angle": thetas,
             },
             name="T",
         )
         Alayer = xr.DataArray(
-            np.empty((2, 2, n_angles, len(wavelengths), n_layers)),
+            np.empty((2, 2, n_angles, num_rows, n_layers)),
             dims=["side", "pol", "angle", "wl", "layer"],
             coords={
                 "side": sides,
                 "pol": pols,
-                "wl": wavelengths * 1e9,
+                "wl": stacked_wavelengths * 1e9,
                 "angle": thetas,
                 "layer": range(1, n_layers + 1),
             },
@@ -124,12 +132,12 @@ def make_TMM_lookuptable(
 
         if profile:
             Aprof = xr.DataArray(
-                np.empty((2, 2, n_angles, 6, len(prof_layers), len(wavelengths))),
+                np.empty((2, 2, n_angles, 6, len(prof_layers), num_rows)),
                 dims=["side", "pol", "angle", "coeff", "layer", "wl"],
                 coords={
                     "side": sides,
                     "pol": pols,
-                    "wl": wavelengths * 1e9,
+                    "wl": stacked_wavelengths * 1e9,
                     "angle": thetas,
                     "layer": prof_layers,
                     "coeff": ["A1", "A2", "A3_r", "A3_i", "a1", "a3"],
@@ -148,11 +156,11 @@ def make_TMM_lookuptable(
         # takes 0.044s
         for i1, side in enumerate(sides):
             prof_layer_side = prof_layer_list[i1]
-            R_loop = np.empty((len(wavelengths), n_angles))
-            T_loop = np.empty((len(wavelengths), n_angles))
-            Alayer_loop = np.empty((n_angles, len(wavelengths), n_layers))
+            R_loop = np.empty((num_rows, n_angles))
+            T_loop = np.empty((num_rows, n_angles))
+            Alayer_loop = np.empty((n_angles, num_rows, n_layers))
             if profile:
-                Aprof_loop = np.empty((n_angles, 6, len(prof_layers), len(wavelengths)))
+                Aprof_loop = np.empty((n_angles, 6, len(prof_layers), num_rows))
 
             pass_options["coherent"] = coherent
             pass_options["coherency_list"] = coherency_lists[i1]
@@ -165,21 +173,24 @@ def make_TMM_lookuptable(
                 pass_options["thetas_in"] = thetas
 
                 res = tmm_struct.calculate(
-                    pass_options, profile=profile, layers=prof_layer_side
+                    pass_options, profile=profile, layers=prof_layer_side, width_differentials=width_differentials
                 )
 
                 R_result = np.real(res["R"])
                 T_result = np.real(res["T"])
                 A_per_layer_result = np.real(res["A_per_layer"])
+
                 if profile:
                     profile_coeff_result = np.real(res["profile_coeff"])
 
-                for i3, _ in enumerate(thetas):
-                    R_loop[:, i3] = R_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
-                    T_loop[:, i3] = T_result[i3*len(wavelengths):(i3+1)*len(wavelengths)]
-                    Alayer_loop[i3, :, :] = A_per_layer_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:]
-                    if profile:
-                        Aprof_loop[i3, :, :, :] = profile_coeff_result[i3*len(wavelengths):(i3+1)*len(wavelengths),:,:]
+                for i4 in range(width_differentials_num+1):
+                    offset = i4*len(wavelengths)*len(thetas)
+                    for i3, _ in enumerate(thetas):
+                        R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                        T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                        Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        if profile:
+                            Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :, :] = profile_coeff_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:,:]
 
                 # sometimes get very small negative values (like -1e-20)
                 R_loop[R_loop < 0] = 0

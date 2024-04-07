@@ -202,7 +202,7 @@ def bulk_profile_calc(v_1, v_2, alphas, thetas, d, depths, A):
 
 
 def load_redistribution_matrices(
-    results_path, n_a_in, n_interfaces, layer_names, front_or_rear, calc_prof_list=None, stored_redistribution_matrices=None, interfaceIndices=None
+    results_path, n_a_in, n_interfaces, layer_names, front_or_rear, num_wl, calc_prof_list=None, stored_redistribution_matrices=None, interfaceIndices=None
 ):
 
     R = []
@@ -221,15 +221,8 @@ def load_redistribution_matrices(
     for i1 in range(n_max):
 
         if (stored_redistribution_matrices is not None) and (stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]] is not None):
-            fullmat = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][0]
-            absmat = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][1]
-
-            mat_path = os.path.join(
-                results_path, layer_names[i1] + front_or_rear + "RT.npz"
-            )
-            absmat_path = os.path.join(
-                results_path, layer_names[i1] + front_or_rear + "A.npz"
-            )
+            fullmat_ = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][0]
+            absmat_ = stored_redistribution_matrices[side_code[front_or_rear]][interfaceIndices[i1]][1]
         else:
             mat_path = os.path.join(
                 results_path, layer_names[i1] + front_or_rear + "RT.npz"
@@ -237,31 +230,40 @@ def load_redistribution_matrices(
             absmat_path = os.path.join(
                 results_path, layer_names[i1] + front_or_rear + "A.npz"
             )
-            fullmat = load_npz(mat_path)
-            absmat = load_npz(absmat_path)
+            fullmat_ = load_npz(mat_path)
+            absmat_ = load_npz(absmat_path)
+
+        fullmat = [fullmat_[:num_wl]]
+        absmat = [absmat_[:num_wl]]
+        if fullmat_.shape[0] > num_wl:
+            count = num_wl
+            while(count < num_wl):
+                fullmat.append(fullmat_[count:count+num_wl])
+                absmat.append(absmat_[count:count+num_wl])
+                count += num_wl
 
         if front_or_rear == "front":  # matrices for front incidence
-            if len(fullmat.shape) == 3:
-                R.append(fullmat[:, :n_a_in, :])
-                T.append(fullmat[:, n_a_in:, :])
-                A.append(absmat)
+            if len(fullmat[0].shape) == 3:
+                R.append(fullmat[0][:, :n_a_in, :])
+                T.append(fullmat[0][:, n_a_in:, :])
+                A.append(absmat[0])
 
             else:
 
-                R.append(fullmat[:n_a_in, :])
-                T.append(fullmat[n_a_in:, :])
-                A.append(absmat)
+                R.append(fullmat[0][:n_a_in, :])
+                T.append(fullmat[0][n_a_in:, :])
+                A.append(absmat[0])
 
         else:  # matrices for rear incidence
-            if len(fullmat.shape) == 3:
-                R.append(fullmat[:, n_a_in:, :])
-                T.append(fullmat[:, :n_a_in, :])
-                A.append(absmat)
+            if len(fullmat[0].shape) == 3:
+                R.append(fullmat[0][:, n_a_in:, :])
+                T.append(fullmat[0][:, :n_a_in, :])
+                A.append(absmat[0])
 
             else:
-                R.append(fullmat[n_a_in:, :])
-                T.append(fullmat[:n_a_in, :])
-                A.append(absmat)
+                R.append(fullmat[0][n_a_in:, :])
+                T.append(fullmat[0][:n_a_in, :])
+                A.append(absmat[0])
 
         if calc_prof_list[i1] is not None:
             profmat_path = os.path.join(
@@ -332,8 +334,6 @@ def matrix_multiplication(
 
     num_wl = len(options["wavelength"])
 
-    # bulk thickness in m
-
     thetas = angle_vector[:n_a_in, 1]
 
     if options.phi_in != "all" and options.phi_in > options.phi_symmetry:
@@ -373,11 +373,11 @@ def matrix_multiplication(
     # load redistribution matrices
 
     Rf, Tf, Af, Pf, If = load_redistribution_matrices(
-        results_path, n_a_in, n_interfaces, layer_names, "front", calc_prof_list, stored_redistribution_matrices, interfaceIndices
+        results_path, n_a_in, n_interfaces, layer_names, "front", num_wl, calc_prof_list, stored_redistribution_matrices, interfaceIndices
     )
 
     Rb, Tb, Ab, Pb, Ib = load_redistribution_matrices(
-        results_path, n_a_in, n_interfaces, layer_names, "rear", calc_prof_list, stored_redistribution_matrices, interfaceIndices
+        results_path, n_a_in, n_interfaces, layer_names, "rear", num_wl, calc_prof_list, stored_redistribution_matrices, interfaceIndices
     )
 
     len_calcs = np.array([len(x) if x is not None else 0 for x in calc_prof_list])
