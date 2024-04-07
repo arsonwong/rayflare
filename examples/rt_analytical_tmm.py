@@ -99,16 +99,18 @@ SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, trans
 times = []
 # with saving: 1s, no saving: 0.65s
 # on laptop no saving: 0.85s; of which calculate_RAT takes up 0.15s
+# 2024-04-07 tested differential cases (total 3 scenarios including baseline): 1.4s
+# compared to 1 scenario: 0.8898s
 for iter in range(4):
     t1 = time.time()
     process_structure(SC, options, overwrite=True)
     results_RT = calculate_RAT(SC, options)
     times.append(time.time()-t1)
 
-RAT = results_RT[0]
-print(RAT)
-plt.plot(RAT['wl'],RAT['R'][0])
-plt.plot(RAT['wl'],RAT['T'][0])
+for i in range(len(results_RT)):
+    RAT = results_RT[i]['RAT']
+    plt.plot(RAT['wl'],RAT['R'][0])
+    plt.plot(RAT['wl'],RAT['T'][0])
 plt.show()
 
 print(times[1:])
