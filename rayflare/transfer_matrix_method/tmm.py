@@ -299,7 +299,8 @@ def TMM(
                 for i3, _ in enumerate(thetas):
                     R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
                     T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                    Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                    if A_per_layer_result.ndim > 1:
+                        Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
                     if profile:
                         Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
 
@@ -370,7 +371,7 @@ def TMM(
         phis_out_r = fold_phi(angle_vector_phi + np.pi, phi_sym)
         if front_or_rear == "rear":
             if non_nan_indices[0].size > 0:
-                thetas_out_t[non_nan_indices] = np.pi - thetas_out_t[non_nan_indices[0]]
+                thetas_out_t[non_nan_indices] = np.pi - thetas_out_t[non_nan_indices]
             thetas_out_r = np.pi - thetas_out_r
 
         bin_out_t = -1*np.ones_like(thetas_out_t)
@@ -719,11 +720,16 @@ class tmm_structure:
                     width_differentials = width_differentials, 
                     detailed = False
                 )
-                A_per_layer = tmm.absorp_in_each_layer(out)
+                if out['vw_list'] is not None:
+                    A_per_layer = tmm.absorp_in_each_layer(out)
+                    output["A_per_layer"] = A_per_layer[1:-1]
+                else:
+                    output["A_per_layer"] = np.array([])
+
                 output["R"] = out["R"]
                 output["A"] = 1 - out["R"] - out["T"]
                 output["T"] = out["T"]
-                output["A_per_layer"] = A_per_layer[1:-1]
+                
             else:
                 out = tmm.inc_tmm(
                     pol,
@@ -813,7 +819,8 @@ class tmm_structure:
                     where=np.sum(A_per_layer, axis=0) != 0,
                 )
 
-        output["A_per_layer"] = output["A_per_layer"].T
+        if output["A_per_layer"].ndim > 1:
+            output["A_per_layer"] = output["A_per_layer"].T
 
         if profile:
             calculate_profile(layers, dist)

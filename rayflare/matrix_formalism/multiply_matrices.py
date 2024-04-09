@@ -585,6 +585,13 @@ def matrix_multiplication(
             for i1 in range(n_bulks):
 
                 vf_1[i1] = dot_wl(Tf[i1], v0)  # pass through front surface
+
+                if i1==0:
+                    Tfirst = xr.DataArray(
+                        np.array(np.sum(vf_1[i1], axis=1)),
+                        name="Tfirst",
+                    )
+                                
                 vr[i1].append(dot_wl(Rf[i1], v0))  # reflected from front surface
                 a[i1].append(
                     dot_wl(Af[i1], v0)
@@ -692,7 +699,7 @@ def matrix_multiplication(
 
                 results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
 
-                RAT = xr.merge([R, A_bulk, T])
+                RAT = xr.merge([R, A_bulk, T, Tfirst])
 
                 grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass})
 

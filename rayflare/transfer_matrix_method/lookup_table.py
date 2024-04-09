@@ -188,7 +188,8 @@ def make_TMM_lookuptable(
                     for i3, _ in enumerate(thetas):
                         R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
                         T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                        Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        if A_per_layer_result.ndim > 1:
+                            Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
                         if profile:
                             Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :, :] = profile_coeff_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:,:]
 

@@ -12,7 +12,7 @@ from copy import deepcopy
 import math
 import numpy as np
 
-def regular_pyramids(elevation_angle=55, upright=True, size=1, **kwargs):
+def regular_pyramids(elevation_angle=54.74, upright=True, size=1, **kwargs):
     """Defines RTSurface textures for ray-tracing of regular upright or inverted regular square-base pyramids.
 
     :param elevation_angle: angle between the horizontal and a face of the pyramid, in degrees

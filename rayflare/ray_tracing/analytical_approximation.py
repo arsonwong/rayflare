@@ -130,10 +130,10 @@ class Ray:
         s_vector = np.outer(s_component_after_scatter, new_s_direction) 
         p_vector = np.outer(p_component_after_scatter, new_p_direction)
         self.polarization = Polarization(s_vector, p_vector)
-        A_mat_comp = None
-        if self.A_entry is not None:
-            A_mat_comp = self.normalized_probability*self.parent.getIntensity()*(s_component[0]*self.A_entry[0] + p_component[0]*self.A_entry[1])
-        return A_mat_comp
+        # A_mat_comp = None
+        # if self.A_entry is not None:
+        #     A_mat_comp = self.normalized_probability*self.parent.getIntensity()*(s_component[0]*self.A_entry[0] + p_component[0]*self.A_entry[1])
+        # return A_mat_comp
 
 def get_ray_directions(ray_queue):
     directions = []
@@ -427,7 +427,10 @@ def RT_analytical(
             all_parent_s_vector =  np.array(all_parent_s_vector)
             all_parent_p_vector =  np.array(all_parent_p_vector)
             all_R_or_T_s = np.array(all_R_or_T_s)
-            all_R_or_T_p = np.array(all_R_or_T_s)
+            all_R_or_T_p = np.array(all_R_or_T_p)
+            if all_parent_s_vector.shape[1]==1:
+                all_parent_s_vector = np.tile(all_parent_s_vector, (1, all_R_or_T_s.shape[1], 1))
+                all_parent_p_vector = np.tile(all_parent_p_vector, (1, all_R_or_T_s.shape[1], 1))
 
             new_s_direction = np.cross(all_parent_direction, all_scatter_plane_normal)
             length_ = np.sqrt(np.sum(new_s_direction**2,axis=1))

@@ -22,7 +22,7 @@ from cycler import cycler
 # Thickness of bottom Ge layer
 bulkthick = 10e-6
 
-wavelengths = np.linspace(300, 1850, 60) * 1e-9
+wavelengths = np.linspace(200, 1400, 100) * 1e-9
 pal = sns.color_palette("husl", len(wavelengths))
 cols = cycler("color", pal)
 
@@ -46,13 +46,385 @@ options.theta_in = 0
 options.n_jobs = -3
 options.depth_spacing_bulk = 1e-7
 
+# Get the current directory
+current_dir = os.getcwd()
+
 # set up Solcore materials
-# ITO = material("ITO")()
-# print(ITO.n_path)
-# ITO.n_path = "blahblah"
+Air = material("Air")()
+material_names = ["Si_", "SiNx_", "SiO2_", "air_", "lossy_air_", "glass_", "heavy_ITO_", "ITO_", "aSip_", "aSin_", "aSii_", "Si_5_5e19_", "Si_1_2e10_", "Si_1_9e10_", "Al2O3_"]
+dict = {element: index for index, element in enumerate(material_names)}
+materials = []
+pathnames = ["Si_Crystalline, 300 K [Gre08].csv", "SiNx_PECVD [Bak11].csv", "SiO2_[Rao19].csv", "air.csv", "lossy_air.csv", "glass.csv", "ITO_Sputtered 6.1e20 [Hol13].csv", "ITO_Sputtered 0.78e20 [Hol13].csv", "Si_Amorphous p [Hol12].csv", "Si_Amorphous n [Hol12].csv", "Si_Amorphous i [Hol12].csv", "Si_Crystalline_n_doped_5_5e19.csv", "Si_Crystalline_n_doped_1_2e20.csv", "Si_Crystalline_n_doped_1_9e20.csv", "Al2O3_ALD on Si [Kim97].csv"]
+for i, name in enumerate(material_names):
+    mat = material(material_names[i])()
+    mat.n_path = os.path.join(current_dir, r"PVL_benchmark", pathnames[i])
+    mat.k_path = mat.n_path
+    mat.load_n_data()
+    mat.load_k_data()
+    materials.append(mat)
+
+def sel_mat(name):
+    return materials[dict[name]]
+
+
+# t1 = time.time()
+# front_materials = [Layer(65e-9, sel_mat("SiNx_")), Layer(20e-9, sel_mat("SiO2_"))]
+# back_materials = [Layer(101e-9, sel_mat("Si_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
+
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct1_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('air-SiNx(65nm)-SiO2(20nm)-Si, \nrandom pyramid texture, incident angle = 0')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+# t1 = time.time()
+
+
+
+
+# front_materials = [Layer(65e-9, sel_mat("SiNx_")), Layer(20e-9, sel_mat("SiO2_"))]
+# back_materials = [Layer(101e-9, sel_mat("Si_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
+
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct1_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('air-SiNx(65nm)-SiO2(20nm)-Si, \nrandom pyramid texture, incident angle = 0')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+# t1 = time.time()
+
+
+
+
+
+# front_materials = [Layer(65e-9, sel_mat("SiNx_")), Layer(20e-9, sel_mat("SiO2_"))]
+# back_materials = [Layer(101e-9, sel_mat("Si_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
+
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct5_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('air-SiNx(65nm)-SiO2(20nm)-Si, \nplanar front, incident angle = 0')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+# t1 = time.time()
+
+
+
+
+# front_materials = [Layer(100e-9, sel_mat("heavy_ITO_")), Layer(100e-9, sel_mat("SiO2_")), Layer(100e-9, sel_mat("SiNx_"))]
+# back_materials = [Layer(101e-9, sel_mat("air_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, Air, name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=sel_mat("Si_"), transmission=Air)
+
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct9_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('Si-SiO2(100nm)-SiNx(100nm)-ITO(100nm)-air, \nplanar texture, incident angle = 0')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+# t1 = time.time()
+
+
+
+
+# front_materials = [Layer(100e-9, sel_mat("heavy_ITO_")), Layer(100e-9, sel_mat("SiO2_")), Layer(100e-9, sel_mat("SiNx_"))]
+# back_materials = [Layer(101e-9, sel_mat("air_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, Air, name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=sel_mat("Si_"), transmission=Air)
+
+# options["n_theta_bins"] = 100
+# options["theta_in"] = 16*np.pi/180
+# options["phi_in"] = 45*np.pi/180
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct10_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('Si-SiO2(100nm)-SiNx(100nm)-ITO(100nm)-air, \nplanar texture, incident angle = 16/45')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+# t1 = time.time()
+
+
+
+
+# front_materials = [Layer(100e-9, sel_mat("heavy_ITO_")), Layer(100e-9, sel_mat("SiO2_")), Layer(100e-9, sel_mat("SiNx_"))]
+# back_materials = [Layer(101e-9, sel_mat("air_"))]
+
+# surf_pyr_upright = regular_pyramids(upright=True)
+# surf_planar = planar_surface()
+# front_surf_pyr = Interface(
+#     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+# )
+# front_surf_planar = Interface(
+#     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+# )
+# back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(1800e-6, Air, name="Si_bulk")  # bulk thickness in m, make very thick
+# SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=sel_mat("Si_"), transmission=Air)
+
+# options["n_theta_bins"] = 100
+# options["theta_in"] = 8*np.pi/180
+# options["phi_in"] = 67*np.pi/180
+# process_structure(SC, options, overwrite=True)
+# results_RT = calculate_RAT(SC, options)
+# print("time: ", time.time()-t1)
+
+# RAT = results_RT[0]['RAT']
+# wl = RAT['wl']*1e9
+# R = np.array(RAT['R'][0])
+# Tfirst = np.array(RAT['Tfirst'])
+# A = 1 - R - Tfirst
+# data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct11_results.csv"), skiprows=0, delimiter=',')
+# data = np.array(data)
+# plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+# plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+# plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+# plt.plot(data[:,0], data[:,2], label='R(PVL)',color='red', linestyle='--')
+# plt.plot(data[:,0], data[:,4], label='T(PVL)',color='green', linestyle='--')
+# plt.plot(data[:,0], data[:,3], label='A(PVL)',color='purple', linestyle='--')
+# plt.title('Si-SiO2(100nm)-SiNx(100nm)-ITO(100nm)-air, \nplanar texture, incident angle = 8/67')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
+
+# t1 = time.time()
+
+
+
+
+
+
+
+
+
+t1 = time.time()
+
+options["n_theta_bins"] = 50
+options["theta_in"] = 0.0
+options["phi_in"] = 0.0
+front_materials = [Layer(70e-9, sel_mat("ITO_")), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
+back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
+
+surf_pyr_upright = regular_pyramids(upright=True)
+surf_planar = planar_surface()
+front_surf_pyr = Interface(
+    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+)
+front_surf_pyr.width_differentials = [7e-9, None, None]
+front_surf_planar = Interface(
+    "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+)
+back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+# back_surf_pyr.width_differentials = [3e-10, None, None]
+back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
+SC = Structure([front_surf_pyr, bulk_Si, back_surf_pyr], incidence=Air, transmission=Air)
+
+process_structure(SC, options, overwrite=True)
+results_RT = calculate_RAT(SC, options)
+print("time: ", time.time()-t1)
+
+for iter in range(len(results_RT)):
+    RAT = results_RT[iter]['RAT']
+    wl = RAT['wl']*1e9
+    R = np.array(RAT['R'][0])
+    Tfirst = np.array(RAT['Tfirst'])
+    A = 1 - R - Tfirst
+    plt.plot(wl, R, label='R(Rayflare)',color='red', linestyle='-')
+    plt.plot(wl, Tfirst, label='T(Rayflare)',color='green', linestyle='-')
+    plt.plot(wl, A, label='A(Rayflare)',color='purple', linestyle='-')
+plt.title('Si-SiO2(100nm)-SiNx(100nm)-ITO(100nm)-air, \nplanar texture, incident angle = 0')
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('RAT')
+plt.ylim(0, 1)
+plt.legend(loc=0)
+plt.show()
+
+t1 = time.time()
+
+
+assert(1==0)
+
+
+
+
+
+
+
+
+# print(ITO.n_data)
+# print(ITO.n(500))
+# print(ITO.k(500))
+# assert(1==0)
+
+# nkdata = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark\ITO_Sputtered 0.78e20 [Hol13].csv"), skiprows=1, encoding='utf-8', delimiter=',')
+# wl = nkdata[:,0]
+# nk = nkdata[:,1] - 1j * nkdata[:,3]
+# print(wl)
+# assert(1==0)
+
+# ITO.n_path = r"..\PVL_benchmark\ITO_Sputtered 0.78e20 [Hol13].csv"
 # ITO.load_n_data()
 # assert(1==0)
+
 Ge = material("Ge")()
+# print(Ge.n)
+# print(Ge.k)
+# Ge.load_n_data()
+# print("boo")
+# print(Ge.n_data)
+# Ge.load_k_data()
+# print("boo2")
+# print(Ge.k_data)
+# assert(1==0)
 Si = material("Si")()
 GaAs = material("GaAs")()
 GaInP = material("GaInP")(In=0.5)
@@ -90,8 +462,9 @@ front_surf_pyr.width_differentials = [front_surf_pyr.widths[0]*0.2]
 
 back_surf = Interface("RT_TMM", layers=back_materials, texture=surf_pyr, name="SiN_RT_TMM", coherent=True)
 
-back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_pyr, name="SiN_TMM", coherent=True)
+back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
 back_surf_planar.width_differentials = [back_surf_planar.widths[0]*0.2] 
+
 
 
 SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=Air)
