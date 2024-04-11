@@ -22,7 +22,8 @@ from cycler import cycler
 # Thickness of bottom Ge layer
 bulkthick = 10e-6
 
-wavelengths = np.linspace(200, 1400, 100) * 1e-9
+# wavelengths = np.linspace(200, 1400, 100) * 1e-9
+wavelengths = np.arange(300,1201,10) * 1e-9
 pal = sns.color_palette("husl", len(wavelengths))
 cols = cycler("color", pal)
 
@@ -32,6 +33,8 @@ plt.rcParams.update(params)
 
 # set options
 options = default_options()
+options.light_trapping_wavelength = 1000e-9
+options.only_incidence_angle = True
 options.wavelength = wavelengths
 options.project_name = "rt_tmm_comparisons"
 options.n_rays = 100000

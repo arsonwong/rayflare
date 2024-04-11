@@ -276,8 +276,15 @@ def TMM(
         pass_options = {}
         pass_options["coherent"] = coherent
         pass_options["coherency_list"] = coherency_list
-        pass_options["wavelength"] = wavelengths
+        wavelength_subset = wavelengths
+        light_trapping_index = 0
+        # if 'light_trapping_wavelength' in options and options["light_trapping_wavelength"] is not None:
+        #     light_trapping_wavelength = options["light_trapping_wavelength"]
+        #     wavelength_subset = wavelengths[wavelengths >= light_trapping_wavelength]
+        #     light_trapping_index = np.searchsorted(wavelengths, options["light_trapping_wavelength"], side='left')
+        pass_options["wavelength"] = wavelength_subset
         pass_options["depth_spacing"] = options["depth_spacing"]
+        pass_options["light_trapping_wavelength"] = options["light_trapping_wavelength"]
 
         for pol in pols:
 
@@ -297,12 +304,12 @@ def TMM(
             for i4 in range(width_differentials_num+1):
                 offset = i4*len(wavelengths)*len(thetas)
                 for i3, _ in enumerate(thetas):
-                    R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                    T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                    R_loop[i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset)]
+                    T_loop[i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset)]
                     if A_per_layer_result.ndim > 1:
-                        Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        Alayer_loop[i3, i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset),:]
                     if profile:
-                        Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        Aprof_loop[i3, i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset),:]
 
             if profile:
                 Aprof_loop[i3, :, :] = res["profile"]

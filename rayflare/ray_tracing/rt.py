@@ -284,12 +284,9 @@ def RT(
                         width_differentials_num += 1
             stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
 
-            # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
-            # multiprocessing not working, for some reason
-            # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s
-            allres = Parallel(n_jobs=4)(
-                delayed(RT_analytical)(
-                    angles_in[i1],
+            if only_incidence_angle: # make only perpendicular incidence for now
+                allres = [RT_analytical(
+                    angles_in[0],
                     stacked_wavelengths,
                     n0,
                     n1,
@@ -306,10 +303,44 @@ def RT(
                     radian_table,
                     R_T_table,
                     A_table,
-                    side,
+                    side)]
+                A_mat = np.zeros((len(stacked_wavelengths), n_absorbing_layers))
+                out_mat = np.zeros((len(stacked_wavelengths), len(angle_vector))) 
+                out_mat = COO.from_numpy(out_mat)  # sparse matrix
+                A_mat = COO.from_numpy(A_mat)
+                local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
+                local_angle_mat = COO.from_numpy(local_angle_mat)
+                for i1 in range(angles_in.shape[0]):
+                    if i1 > 0:
+                        allres.append([out_mat, A_mat, local_angle_mat])
+            else:
+
+                # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
+                # multiprocessing not working, for some reason
+                # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s
+                allres = Parallel(n_jobs=4)(
+                    delayed(RT_analytical)(
+                        angles_in[i1],
+                        stacked_wavelengths,
+                        n0,
+                        n1,
+                        10,
+                        surfaces[0],
+                        phi_sym,
+                        theta_intv,
+                        phi_intv,
+                        N_azimuths,
+                        theta_first_index,
+                        angle_vector,
+                        Fr_or_TMM,
+                        n_absorbing_layers,
+                        radian_table,
+                        R_T_table,
+                        A_table,
+                        side,
+                    )
+                    for i1 in range(angles_in.shape[0])
                 )
-                for i1 in range(angles_in.shape[0])
-            )
 
         allArrays = stack([item[0] for item in allres])
         absArrays = stack([item[1] for item in allres])
