@@ -302,7 +302,7 @@ def TMM(
                 profile_result = np.real(res["profile"])
 
             for i4 in range(width_differentials_num+1):
-                offset = i4*len(wavelengths)*len(thetas)
+                offset = i4*len(wavelength_subset)*len(thetas)
                 for i3, _ in enumerate(thetas):
                     R_loop[i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset)]
                     T_loop[i4*len(wavelengths)+light_trapping_index:(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelength_subset):offset+(i3+1)*len(wavelength_subset)]
