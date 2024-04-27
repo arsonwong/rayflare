@@ -19,7 +19,10 @@ class Structure(list):
         self.stored_redistribution_matrices = []
         self.bulkIndices = []
         self.interfaceIndices = []
-
+        self.light_trapping_onset_wavelength = None
+        self.RAT1st = None
+        if "light_trapping_onset_wavelength" in kwargs:
+            self.light_trapping_onset_wavelength = kwargs["light_trapping_onset_wavelength"]
 
     # def append(self, new_layer, layer_label=None, repeats=1):
     #     # Pass the arguments to the superclass for extending

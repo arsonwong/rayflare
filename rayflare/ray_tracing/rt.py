@@ -284,6 +284,17 @@ def RT(
                         width_differentials_num += 1
             stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
 
+            if R_T_table.shape[2] > stacked_wavelengths.size:
+                full_wavelength_size = int(R_T_table.shape[2]/(width_differentials_num+1))
+                R_T_table_ = np.copy(R_T_table)
+                A_table_ = np.copy(A_table)
+                R_T_table = R_T_table[:,:,:stacked_wavelengths.size]
+                A_table = A_table[:,:,:stacked_wavelengths.size]
+                for i in range(0,width_differentials_num+1):
+                    R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
+                    A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
+
+
             if only_incidence_angle: # make only perpendicular incidence for now
                 allres = [RT_analytical(
                     angles_in[0],

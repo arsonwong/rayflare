@@ -55,6 +55,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
     if isinstance(options, dict):
         options = State(options)
 
+    get_wavelength(options)
+    first_pass_wavelength = options["wavelength"]
+    light_trapping_wavelength = options["wavelength"]
+    if SC.light_trapping_onset_wavelength is not None:
+        light_trapping_wavelength = options["wavelength"][options["wavelength"] >= SC.light_trapping_onset_wavelength]
+
     def determine_only_incidence(sd, j1, oia):
         if sd == "front" and j1 == 0 and oia:
             only_inc = True
@@ -145,6 +151,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
         if isinstance(struct, BulkLayer):
             SC.bulkIndices.append(i1)
             get_wavelength(options)
+            if True: #i1 > 0 or side=="rear":
+                options['wavelength'] = light_trapping_wavelength
             n_a_in = int(len(angle_vector) / 2)
             thetas = angle_vector[:n_a_in, 1]
             stored_front_redistribution_matrices.append(make_D(struct.material.alpha(options["wavelength"]), struct.width, thetas))
@@ -198,6 +206,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 prof_layers = struct.prof_layers
 
                 for side in which_sides:
+                    if i1 > 0 or side=="rear":
+                        options['wavelength'] = light_trapping_wavelength
+                        
                     # only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
                     allArrays, absArrays = TMM(
                         struct.layers,
@@ -231,6 +242,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
                 group = RTgroup(textures=[struct.texture])
                 for side in which_sides:
+                    if i1 > 0 or side=="rear":
+                        options['wavelength'] = light_trapping_wavelength
+
                     only_incidence_angle = determine_only_incidence(
                         side, i1, options["only_incidence_angle"]
                     )
@@ -256,6 +270,31 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         width_differentials = struct.width_differentials
                     )
                     if side=="front":
+                        if i1 == 0 and SC.light_trapping_onset_wavelength is not None:
+                            width_differentials_num = 0
+                            if struct.width_differentials is not None:
+                                for d in struct.width_differentials:
+                                    if d is not None:
+                                        width_differentials_num += 1
+                            angle_num = allArrays.shape[2]
+                            SC.RAT1st = {'wl':[], 'R':[], 'A':[], 'T':[]}
+                            allArrays = allArrays.todense()
+                            absArrays = absArrays.todense()
+                            allArrays_ = np.copy(allArrays)
+                            absArrays_ = np.copy(absArrays)
+                            for i in range(0,width_differentials_num+1):
+                                SC.RAT1st['wl'].append(first_pass_wavelength)
+                                SC.RAT1st['R'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:angle_num,0],axis=1))
+                                SC.RAT1st['T'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,angle_num:,0],axis=1))
+                                SC.RAT1st['A'].append(absArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0])
+                            allArrays = allArrays[:light_trapping_wavelength.size*(width_differentials_num+1),:,:]
+                            absArrays = absArrays[:light_trapping_wavelength.size*(width_differentials_num+1),:,:]
+                            for i in range(0,width_differentials_num+1):
+                                allArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = allArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
+                                absArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = absArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
+
+                            allArrays = COO.from_numpy(allArrays)
+                            absArrays = COO.from_numpy(absArrays)
                         stored_front_redistribution_matrices.append([allArrays,absArrays])
                     else:
                         stored_rear_redistribution_matrices.append([allArrays,absArrays])
@@ -312,6 +351,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         save=True,
                         overwrite=overwrite,
                     )
+
+        options['wavelength'] = first_pass_wavelength
         if len(stored_front_redistribution_matrices) < i1+1:
             stored_front_redistribution_matrices.append(None)
         if len(stored_rear_redistribution_matrices) < i1+1:

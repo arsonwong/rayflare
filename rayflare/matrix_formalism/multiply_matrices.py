@@ -69,6 +69,11 @@ def calculate_RAT(SC, options, save_location="default"):
             layer_widths.append((np.array(struct.widths) * 1e9).tolist())
             calc_prof_list.append(struct.prof_layers)
 
+    if SC.light_trapping_onset_wavelength is not None:
+        options["light_trapping_wavelength"] = options["wavelength"][options["wavelength"] >= SC.light_trapping_onset_wavelength]
+    else:
+        options["light_trapping_wavelength"] = options["wavelength"]
+
     results = matrix_multiplication(
         bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices
     )
@@ -374,9 +379,7 @@ def matrix_multiplication(
     )
     n_a_in = int(len(angle_vector) / 2)
 
-    get_wavelength(options)
-
-    num_wl = len(options["wavelength"])
+    num_wl = len(options["light_trapping_wavelength"])
 
     thetas = angle_vector[:n_a_in, 1]
 
@@ -628,7 +631,7 @@ def matrix_multiplication(
         A = [np.array(item) for item in A]
 
         sum_dims = ["bulk_index", "wl"]
-        sum_coords = {"bulk_index": np.arange(0, n_bulks), "wl": options["wavelength"]}
+        sum_coords = {"bulk_index": np.arange(0, n_bulks), "wl": options["light_trapping_wavelength"]}
 
         R = xr.DataArray(
             np.array([np.sum(item, (0, 2)) for item in vr]),
@@ -673,7 +676,7 @@ def matrix_multiplication(
                     dims=["surf_index", "wl"],
                     coords={
                         "surf_index": np.arange(0, n_interfaces),
-                        "wl": options["wavelength"],
+                        "wl": options["light_trapping_wavelength"],
                     },
                     name="A_interface",
                 )
@@ -685,7 +688,7 @@ def matrix_multiplication(
                             xr.DataArray(
                                 np.sum(item, 0),
                                 dims=["wl", "z"],
-                                coords={"wl": options["wavelength"]},
+                                coords={"wl": options["light_trapping_wavelength"]},
                                 name="A_profile" + str(j1),
                             )
                         )  # not necessarily same number of z coords per layer stack
