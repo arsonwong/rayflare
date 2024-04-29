@@ -1,7 +1,8 @@
 import sys
 import os
 sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
+# sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
+sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
 
 from solcore.structure import Layer
 from solcore import material
@@ -11,7 +12,7 @@ import time
 
 # rayflare imports
 from rayflare.textures.standard_rt_textures import planar_surface, regular_pyramids
-from rayflare.structure import Interface, BulkLayer, Structure
+from rayflare.structure import Interface, BulkLayer, Structure, Roughness
 from rayflare.matrix_formalism import process_structure, calculate_RAT
 from rayflare.options import default_options
 from rayflare.ray_tracing import rt_structure
@@ -409,8 +410,9 @@ front_surf_planar = Interface(
 )
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
-bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
-SC = Structure([front_surf_pyr, bulk_Si, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
+bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  
+roughness = Roughness(np.pi/10)
+SC = Structure([front_surf_pyr, roughness, bulk_Si, roughness, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
 
 process_structure(SC, options, overwrite=True)
 results_RT = calculate_RAT(SC, options)

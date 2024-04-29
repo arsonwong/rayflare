@@ -9,7 +9,7 @@ import numpy as np
 from solcore.state import State
 
 from rayflare.transfer_matrix_method.lookup_table import make_TMM_lookuptable
-from rayflare.structure import Interface, RTgroup, BulkLayer
+from rayflare.structure import Interface, RTgroup, BulkLayer, Roughness
 from rayflare.ray_tracing import RT
 from rayflare.rigorous_coupled_wave_analysis import RCWA
 from rayflare.transfer_matrix_method import TMM
@@ -32,6 +32,9 @@ def make_D(alphas, thick, thetas):
     diag = np.exp(-alphas[:, None] * thick / abs(np.cos(thetas[None, :])))
     D_1 = stack([COO.from_numpy(np.diag(x)) for x in diag])
     return D_1
+
+def make_roughness(stdev, theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index):
+    pass
 
 def process_structure(SC, options, save_location="default", overwrite=False):
     """
@@ -140,11 +143,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
     theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
 
-    theta_intv, phi_intv, angle_vector = make_angle_vector(
+    theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index = make_angle_vector(
         options["n_theta_bins"],
         options["phi_symmetry"],
         options["c_azimuth"],
         theta_spacing,
+        output_N_azimuths=True
     )
     
     for i1, struct in enumerate(SC):
@@ -156,6 +160,10 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             n_a_in = int(len(angle_vector) / 2)
             thetas = angle_vector[:n_a_in, 1]
             stored_front_redistribution_matrices.append(make_D(struct.material.alpha(options["wavelength"]), struct.width, thetas))
+
+        if isinstance(struct, Roughness):
+            SC.roughnessIndices.append(i1)
+            stored_front_redistribution_matrices.append(make_roughness(struct.stdev, theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index))
 
         if isinstance(struct, Interface):
             SC.interfaceIndices.append(i1)

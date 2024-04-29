@@ -9,7 +9,7 @@ from solcore.structure import Layer
 
 
 class Structure(list):
-    # both interfaces and bulk layers
+    # both interfaces and bulk layers and roughness layers
 
     def __init__(self, *args, **kwargs):
         super(Structure, self).__init__(*args)
@@ -19,6 +19,7 @@ class Structure(list):
         self.stored_redistribution_matrices = []
         self.bulkIndices = []
         self.interfaceIndices = []
+        self.roughnessIndices = []
         self.light_trapping_onset_wavelength = None
         self.RAT1st = None
         if "light_trapping_onset_wavelength" in kwargs:
@@ -75,6 +76,9 @@ class BulkLayer:
         self.material = material
         self.__dict__.update(kwargs)
 
+class Roughness:
+    def __init__(self,stdev):
+        self.stdev = stdev 
 
 class Interface:
     def __init__(
