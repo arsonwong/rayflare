@@ -75,7 +75,7 @@ def calculate_RAT(SC, options, save_location="default"):
         options["light_trapping_wavelength"] = options["wavelength"]
 
     results = matrix_multiplication(
-        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices
+        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices, SC.roughnessIndices
     )
 
     return results
@@ -164,6 +164,8 @@ def make_D(alphas, thick, thetas):
 
 # using einsum yields roughly 25 times speed increase (if for loop loops over 60 wavelengths)
 def dot_wl(mat, vec):
+    # print(mat.shape)
+    # print(vec.shape)
 
     if len(mat.shape) == 3:
         result = einsum('ijk,ik->ij', mat, vec).todense()
@@ -347,7 +349,7 @@ def append_per_pass_info(i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab):
 
 
 def matrix_multiplication(
-    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None, bulkIndices=None, interfaceIndices=None
+    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None, bulkIndices=None, interfaceIndices=None, roughnessIndices=None
 ):
     """
 
@@ -405,6 +407,9 @@ def matrix_multiplication(
     )
 
     D = []
+    front_roughness = []
+    rear_roughness = []
+    count = 0
     depths_bulk = []
     for i1 in range(n_bulks):
         D.append(
@@ -416,6 +421,20 @@ def matrix_multiplication(
             depths_bulk.append(
                 np.arange(0, bulk_thick[i1], options["depth_spacing_bulk"])
             )
+
+        #find roughnessIndices which is one before bulkIndices[i1]
+        if bulkIndices[i1]-1 in roughnessIndices:
+            front_roughness.append(stored_redistribution_matrices[0][roughnessIndices[count]])
+            count += 1
+        else:
+            front_roughness.append(None)
+
+        #find roughnessIndices which is one after bulkIndices[i1]
+        if bulkIndices[i1]+1 in roughnessIndices:
+            rear_roughness.append(stored_redistribution_matrices[0][roughnessIndices[count]])
+            count += 1
+        else:
+            rear_roughness.append(None)
 
     # load redistribution matrices
     outputs = load_redistribution_matrices(
@@ -608,10 +627,14 @@ def matrix_multiplication(
 
                 while np.any(power > options["I_thresh"]):
                     vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
+                    if front_roughness[i1] is not None:
+                        vf_1[i1] = dot_wl(front_roughness[i1], vf_1[i1]) # roughness scatter
                     vb_1[i1] = dot_wl(D[i1], vf_1[i1])  # pass through bulk, downwards
                     A[i1].append(np.sum(vf_1[i1], 1) - np.sum(vb_1[i1], 1))
 
                     vb_2[i1] = dot_wl(Rf[i1 + 1], vb_1[i1])  # reflect from back surface
+                    if rear_roughness[i1] is not None:
+                        vb_2[i1] = dot_wl(rear_roughness[i1], vb_2[i1]) # roughness scatter
                     vf_2[i1] = dot_wl(D[i1], vb_2[i1])  # pass through bulk, upwards
                     vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
                     vf_1[i1] = dot_wl(Rb[i1], vf_2[i1])  # reflect from front surface

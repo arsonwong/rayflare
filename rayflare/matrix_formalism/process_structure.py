@@ -13,7 +13,7 @@ from rayflare.structure import Interface, RTgroup, BulkLayer, Roughness
 from rayflare.ray_tracing import RT
 from rayflare.rigorous_coupled_wave_analysis import RCWA
 from rayflare.transfer_matrix_method import TMM
-from rayflare.angles import make_angle_vector
+from rayflare.angles import make_angle_vector, make_roughness
 from rayflare.matrix_formalism.ideal_cases import lambertian_matrix, mirror_matrix
 from rayflare.utilities import get_savepath, get_wavelength
 from rayflare import logger
@@ -32,9 +32,6 @@ def make_D(alphas, thick, thetas):
     diag = np.exp(-alphas[:, None] * thick / abs(np.cos(thetas[None, :])))
     D_1 = stack([COO.from_numpy(np.diag(x)) for x in diag])
     return D_1
-
-def make_roughness(stdev, theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index):
-    pass
 
 def process_structure(SC, options, save_location="default", overwrite=False):
     """
@@ -90,10 +87,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
     for i1, struct in enumerate(SC):
         if isinstance(struct, BulkLayer):
             layer_widths.append(struct.width * 1e9)  # convert m to nm
-        if isinstance(struct, Interface):
+        elif isinstance(struct, Interface):
             layer_widths.append(
                 (np.array(struct.widths) * 1e9).tolist()
             )  # convert m to nm
+        else:
+            layer_widths.append(None)
 
     SC.TMM_lookup_table = []
     for i1, struct in enumerate(SC):
@@ -105,12 +104,18 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 if i1 == 0:  # top interface
                     incidence = SC.incidence
                 else:  # not top interface
-                    incidence = SC[i1 - 1].material  # bulk material above
+                    if isinstance(SC[i1 - 1], Roughness):
+                        incidence = SC[i1 - 2].material  # bulk material above
+                    else:
+                        incidence = SC[i1 - 1].material
 
                 if i1 == (len(SC) - 1):  # bottom interface
                     substrate = SC.transmission
                 else:  # not bottom interface
-                    substrate = SC[i1 + 1].material  # bulk material below
+                    if isinstance(SC[i1 + 1], Roughness):
+                        substrate = SC[i1 + 2].material  # bulk material below
+                    else:
+                        substrate = SC[i1 + 1].material  # bulk material below
 
                 coherent, coherency_list = determine_coherency(struct)
 
@@ -161,9 +166,10 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             thetas = angle_vector[:n_a_in, 1]
             stored_front_redistribution_matrices.append(make_D(struct.material.alpha(options["wavelength"]), struct.width, thetas))
 
+        # roughness can only be between an interface and a bulk
         if isinstance(struct, Roughness):
             SC.roughnessIndices.append(i1)
-            stored_front_redistribution_matrices.append(make_roughness(struct.stdev, theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index))
+            stored_front_redistribution_matrices.append(make_roughness(struct.stdev, options["phi_symmetry"], theta_intv, phi_intv, N_azimuths, theta_first_index, angle_vector, len(light_trapping_wavelength)))
 
         if isinstance(struct, Interface):
             SC.interfaceIndices.append(i1)
@@ -171,13 +177,19 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             if i1 == 0:
                 incidence = SC.incidence
             else:
-                incidence = SC[i1 - 1].material  # bulk material above
+                if isinstance(SC[i1 - 1], Roughness):
+                    incidence = SC[i1 - 2].material  # bulk material above
+                else:
+                    incidence = SC[i1 - 1].material  # bulk material above
 
             if i1 == (len(SC) - 1):
                 substrate = SC.transmission
                 which_sides = ["front"]
             else:
-                substrate = SC[i1 + 1].material  # bulk material below
+                if isinstance(SC[i1 + 1], Roughness):
+                    substrate = SC[i1 + 2].material  # bulk material below
+                else:
+                    substrate = SC[i1 + 1].material  # bulk material below
                 which_sides = ["front", "rear"]
 
             if struct.method == "Mirror":
