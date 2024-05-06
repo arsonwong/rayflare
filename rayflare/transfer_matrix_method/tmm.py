@@ -45,7 +45,8 @@ def TMM(
     front_or_rear="front",
     save=True,
     overwrite=False,
-    width_differentials = None
+    width_differentials = None,
+    nk_differentials = None
 ):
     """
     Function which takes a layer stack and creates an angular redistribution matrix.
@@ -210,10 +211,14 @@ def TMM(
             profile = False
             dist = None
 
+        width_differentials_ = width_differentials
+        nk_differentials_ = nk_differentials
         if front_or_rear != "front":
             optlayers = OptiStack(
                 layers[::-1], substrate=incidence, incidence=transmission
             )
+            width_differentials_ = width_differentials[::-1]
+            nk_differentials_ = nk_differentials[::-1]
             trns = incidence
             inc = transmission
 
@@ -228,8 +233,14 @@ def TMM(
             for d in width_differentials:
                 if d is not None:
                     width_differentials_num += 1
-        num_rows = len(wavelengths)*(width_differentials_num+1)
-        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
+        nk_differentials_num = 0
+        if nk_differentials is not None:
+            for d in nk_differentials:
+                if d is not None:
+                    nk_differentials_num += 1
+
+        num_rows = len(wavelengths)*(width_differentials_num+nk_differentials_num+1)
+        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+nk_differentials_num+1)
 
         R = xr.DataArray(
             np.empty((len(pols), num_rows, n_angles)),
@@ -285,7 +296,8 @@ def TMM(
             pass_options["thetas_in"] = thetas
 
             res = tmm_struct.calculate(
-                pass_options, profile=profile, layers=prof_layers, dist=dist, width_differentials=width_differentials
+                pass_options, profile=profile, layers=prof_layers, dist=dist, 
+                width_differentials=width_differentials_, nk_differentials=nk_differentials_
             )
 
             R_result = np.real(res["R"])
@@ -294,7 +306,7 @@ def TMM(
             if profile:
                 profile_result = np.real(res["profile"])
 
-            for i4 in range(width_differentials_num+1):
+            for i4 in range(width_differentials_num+nk_differentials_num+1):
                 offset = i4*len(wavelengths)*len(thetas)
                 for i3, _ in enumerate(thetas):
                     R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
@@ -481,7 +493,7 @@ class tmm_structure:
         self.no_back_reflection = no_back_reflection
         self.width = np.sum(layer_stack.widths) / 1e9
 
-    def calculate(self, options, profile=False, layers=None, dist=None, width_differentials=None):
+    def calculate(self, options, profile=False, layers=None, dist=None, width_differentials=None, nk_differentials=None):
         """ Calculates the reflected, absorbed and transmitted intensity of the structure for the wavelengths and angles
         defined.
 
@@ -698,16 +710,28 @@ class tmm_structure:
             "all_s": [],
         }
 
-        n_list = layer_stack.get_indices(wavelength)
+        n_list = layer_stack.get_indices(wavelength, nk_differentials=nk_differentials)
+        n_list_diff = None
+        if isinstance(n_list,dict):
+            n_list_ = n_list
+            n_list = n_list_['baseline']
+            n_list_diff = n_list_['diff']
+
         d_list = layer_stack.get_widths()
         # stack the angles and wavelengths
         if not isinstance(angles, np.ndarray):
             angles = np.array([angles])
         num_angles = angles.shape[0]
+
         angles = np.repeat(angles,wavelength.shape[0])
         wavelength = np.tile(wavelength,num_angles)
         for i, _ in enumerate(n_list):
             n_list[i] = np.tile(n_list[i], num_angles)
+
+        if nk_differentials is not None:
+            for i, _ in enumerate(n_list_diff):
+                if n_list_diff[i] is not None:
+                    n_list_diff[i] = np.tile(n_list_diff[i], num_angles)
 
         if pol in "sp":
             if coherent:
@@ -718,6 +742,7 @@ class tmm_structure:
                     angles,
                     wavelength,
                     width_differentials = width_differentials, 
+                    n_list_diff = n_list_diff,
                     detailed = False
                 )
                 if out['vw_list'] is not None:

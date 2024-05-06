@@ -29,7 +29,8 @@ def make_TMM_lookuptable(
     overwrite=False,
     include_unpol = True,
     save = True,
-    width_differentials = None
+    width_differentials = None,
+    nk_differentials = None
 ):
     """
     Takes a layer stack and calculates and stores lookup tables for use with the ray-tracer.
@@ -93,8 +94,12 @@ def make_TMM_lookuptable(
             for d in width_differentials:
                 if d is not None:
                     width_differentials_num += 1
-        num_rows = len(wavelengths)*(width_differentials_num+1)
-        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
+        num_nk_differentials = 0
+        if nk_differentials is not None:  
+            num_nk_differentials = sum(1 for element in nk_differentials if element is not None)
+
+        num_rows = len(wavelengths)*(width_differentials_num+num_nk_differentials+1)
+        stacked_wavelengths = np.tile(wavelengths,width_differentials_num+num_nk_differentials+1)
         R = xr.DataArray(
             np.empty((2, 2, num_rows, n_angles)),
             dims=["side", "pol", "wl", "angle"],
@@ -166,6 +171,11 @@ def make_TMM_lookuptable(
             pass_options["coherency_list"] = coherency_lists[i1]
 
             tmm_struct = tmm_structure(optstacks[i1])
+            width_differentials_ = width_differentials
+            nk_differentials_ = nk_differentials
+            if side == -1:
+                width_differentials_ = width_differentials[::-1]
+                nk_differentials_ = nk_differentials[::-1]
 
             for pol in pols:
 
@@ -173,7 +183,7 @@ def make_TMM_lookuptable(
                 pass_options["thetas_in"] = thetas
 
                 res = tmm_struct.calculate(
-                    pass_options, profile=profile, layers=prof_layer_side, width_differentials=width_differentials
+                    pass_options, profile=profile, layers=prof_layer_side, width_differentials=width_differentials_, nk_differentials=nk_differentials_
                 )
 
                 R_result = np.real(res["R"])
@@ -183,7 +193,7 @@ def make_TMM_lookuptable(
                 if profile:
                     profile_coeff_result = np.real(res["profile_coeff"])
 
-                for i4 in range(width_differentials_num+1):
+                for i4 in range(width_differentials_num+num_nk_differentials+1):
                     offset = i4*len(wavelengths)*len(thetas)
                     for i3, _ in enumerate(thetas):
                         R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]

@@ -137,7 +137,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     overwrite,
                     include_unpol=False,
                     save = False,
-                    width_differentials = struct.width_differentials
+                    width_differentials = struct.width_differentials,
+                    nk_differentials = struct.nk_parameter_differentials
                 ))
 
         if len(SC.TMM_lookup_table) < i1+1:
@@ -243,7 +244,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         front_or_rear=side,
                         save=False,
                         overwrite=overwrite,
-                        width_differentials = struct.width_differentials
+                        width_differentials = struct.width_differentials, 
+                        nk_differentials = struct.nk_parameter_differentials
                     )
                     if side=="front":
                         stored_front_redistribution_matrices.append([allArrays,absArrays])

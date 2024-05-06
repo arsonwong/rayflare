@@ -62,6 +62,19 @@ for i, name in enumerate(material_names):
     mat = material(material_names[i])()
     mat.n_path = os.path.join(current_dir, r"PVL_benchmark", pathnames[i])
     mat.k_path = mat.n_path
+    if name == "ITO_":
+        path_ = [{'parameter':0.17e20,'path':'ITO_Sputtered 0.17e20 [Hol13].csv'},
+                 {'parameter':0.30e20,'path':'ITO_Sputtered 0.30e20 [Hol13].csv'},
+                {'parameter':0.65e20,'path':'ITO_Sputtered 0.65e20 [Hol13].csv'},
+                {'parameter':0.78e20,'path':'ITO_Sputtered 0.78e20 [Hol13].csv'},
+                {'parameter':1.0e20,'path':'ITO_Sputtered 1.0e20 [Hol13].csv'},
+                {'parameter':2.0e20,'path':'ITO_Sputtered 2.0e20 [Hol13].csv'},
+                {'parameter':4.9e20,'path':'ITO_Sputtered 4.9e20 [Hol13].csv'},
+                {'parameter':6.1e20,'path':'ITO_Sputtered 6.1e20 [Hol13].csv'}]
+        for entry in path_:
+            entry['path'] = os.path.join(current_dir, r"PVL_benchmark", entry['path'])
+        mat.n_path = path_
+        mat.k_path = path_
     mat.load_n_data()
     mat.load_k_data()
     materials.append(mat)
@@ -406,6 +419,8 @@ for iter in range(2):
     front_surf_pyr = Interface(
         "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
     )
+    front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
+    front_surf_pyr.nk_parameter_differentials = [1e19, None, None]
     front_surf_planar = Interface(
         "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
     )
@@ -461,7 +476,7 @@ t1 = time.time()
 options["n_theta_bins"] = 50
 options["theta_in"] = 0.0
 options["phi_in"] = 0.0
-front_materials = [Layer(70e-9, sel_mat("ITO_")), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
+front_materials = [{'layer':Layer(70e-9, sel_mat("ITO_")),'parameter':0.5e20}, Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
 back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
 
 surf_pyr_upright = regular_pyramids(upright=True)
@@ -470,6 +485,7 @@ front_surf_pyr = Interface(
     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
 )
 front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
+front_surf_pyr.nk_parameter_differentials = [1e19, None, None]
 front_surf_planar = Interface(
     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
 )
