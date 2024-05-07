@@ -289,7 +289,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         overwrite=overwrite,
                         analytical_approx = analytical_approx,
                         lookuptable=SC.TMM_lookup_table[i1],
-                        width_differentials = struct.width_differentials
+                        width_differentials = struct.width_differentials,
+                        nk_differentials = struct.nk_parameter_differentials
                     )
                     if side=="front":
                         if i1 == 0 and SC.light_trapping_onset_wavelength is not None:
@@ -298,20 +299,25 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                                 for d in struct.width_differentials:
                                     if d is not None:
                                         width_differentials_num += 1
+                            nk_differentials_num = 0
+                            if struct.nk_parameter_differentials is not None:
+                                for d in struct.nk_parameter_differentials:
+                                    if d is not None:
+                                        nk_differentials_num += 1
                             angle_num = allArrays.shape[2]
                             SC.RAT1st = {'wl':[], 'R':[], 'A':[], 'T':[]}
                             allArrays = allArrays.todense()
                             absArrays = absArrays.todense()
                             allArrays_ = np.copy(allArrays)
                             absArrays_ = np.copy(absArrays)
-                            for i in range(0,width_differentials_num+1):
+                            for i in range(0,width_differentials_num+nk_differentials_num+1):
                                 SC.RAT1st['wl'].append(first_pass_wavelength)
                                 SC.RAT1st['R'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:angle_num,0],axis=1))
                                 SC.RAT1st['T'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,angle_num:,0],axis=1))
                                 SC.RAT1st['A'].append(absArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0])
-                            allArrays = allArrays[:light_trapping_wavelength.size*(width_differentials_num+1),:,:]
-                            absArrays = absArrays[:light_trapping_wavelength.size*(width_differentials_num+1),:,:]
-                            for i in range(0,width_differentials_num+1):
+                            allArrays = allArrays[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
+                            absArrays = absArrays[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
+                            for i in range(0,width_differentials_num+nk_differentials_num+1):
                                 allArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = allArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
                                 absArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = absArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
 

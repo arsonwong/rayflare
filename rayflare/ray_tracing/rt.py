@@ -48,7 +48,8 @@ def RT(
     overwrite=False,
     analytical_approx = False,
     lookuptable = None,
-    width_differentials = None
+    width_differentials = None,
+    nk_differentials = None
 ):
     """Calculates the reflection/transmission and absorption redistribution matrices for an interface using
     either a previously calculated TMM lookup table or the Fresnel equations.
@@ -282,18 +283,23 @@ def RT(
                 for d in width_differentials:
                     if d is not None:
                         width_differentials_num += 1
-            stacked_wavelengths = np.tile(wavelengths,width_differentials_num+1)
+            nk_differentials_num = 0
+            if nk_differentials is not None:
+                for d in nk_differentials:
+                    if d is not None:
+                        nk_differentials_num += 1
+
+            stacked_wavelengths = np.tile(wavelengths,width_differentials_num+nk_differentials_num+1)
 
             if R_T_table.shape[2] > stacked_wavelengths.size:
-                full_wavelength_size = int(R_T_table.shape[2]/(width_differentials_num+1))
+                full_wavelength_size = int(R_T_table.shape[2]/(width_differentials_num+nk_differentials_num+1))
                 R_T_table_ = np.copy(R_T_table)
                 A_table_ = np.copy(A_table)
                 R_T_table = R_T_table[:,:,:stacked_wavelengths.size]
                 A_table = A_table[:,:,:stacked_wavelengths.size]
-                for i in range(0,width_differentials_num+1):
+                for i in range(0,width_differentials_num+nk_differentials_num+1):
                     R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
                     A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
-
 
             if only_incidence_angle: # make only perpendicular incidence for now
                 allres = [RT_analytical(

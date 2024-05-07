@@ -420,7 +420,7 @@ for iter in range(2):
         "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
     )
     front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
-    front_surf_pyr.nk_parameter_differentials = [1e19, None, None]
+    front_surf_pyr.nk_parameter_differentials = [10e20, None, None]
     front_surf_planar = Interface(
         "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
     )
