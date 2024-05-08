@@ -1,5 +1,10 @@
 import numpy as np
 import os
+import sys
+
+sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
+sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
 
 from solcore.structure import Layer
 from solcore import material
@@ -52,10 +57,13 @@ cur_path = os.path.dirname(os.path.abspath(__file__))
 
 
 # matrix multiplication
-wavelengths = np.linspace(300, 1200, 50) * 1e-9
+wavelengths = np.arange(300,1201,10) * 1e-9
 
 options = default_options()
 options.wavelength = wavelengths
+options.only_incidence_angle = True
+options.lookuptable_angles = 200
+options.parallel = True
 options.project_name = "perovskite_Si_example"
 options.n_rays = 2000
 options.n_theta_bins = 30
@@ -63,6 +71,7 @@ options.nx = 2
 options.ny = 2
 options.depth_spacing = 1e-9
 options.phi_symmetry = np.pi / 2
+options.bulk_profile = False
 
 Si = material("Si")()
 Air = material("Air")()
@@ -104,12 +113,11 @@ surf = regular_pyramids(elevation_angle=55, upright=True)
 surf_back = regular_pyramids(elevation_angle=55, upright=False)
 
 front_surf = Interface(
-    "RT_TMM",
+    "RT_analytical_TMM",
     texture=surf,
     layers=front_materials,
     name="Perovskite_aSi_widthcorr",
-    coherent=True,
-    prof_layers=np.arange(1, 10),
+    coherent=True
 )
 # NOTE: depending on your computer, calculation the absorption profiles in the front surface may cause
 # memory-related errors as it uses extremely large matrices. Hopefully this can be resolved in the future but if this is
@@ -118,19 +126,18 @@ front_surf = Interface(
 # front_surf = Interface('RT_TMM', texture = surf, layers=front_materials, name = 'Perovskite_aSi_widthcorr',
 #                        coherent=True)
 
-back_surf = Interface("RT_TMM", texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
+back_surf = Interface("RT_analytical_TMM", texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
 
 
 bulk_Si = BulkLayer(260e-6, Si, name="Si_bulk")  # bulk thickness in m
 
 SC = Structure([front_surf, bulk_Si, back_surf], incidence=Air, transmission=Ag)
 
-process_structure(SC, options)
-
+process_structure(SC, options, overwrite=True)
 results = calculate_RAT(SC, options)
 
-RAT = results[0]
-results_per_pass = results[1]
+RAT = results[0]['RAT']
+results_per_pass = results[0]['results_per_pass']
 
 
 R_per_pass = np.sum(results_per_pass["r"][0], 2)
