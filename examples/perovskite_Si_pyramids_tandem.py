@@ -57,13 +57,14 @@ cur_path = os.path.dirname(os.path.abspath(__file__))
 
 
 # matrix multiplication
-wavelengths = np.arange(300,1201,10) * 1e-9
+# wavelengths = np.arange(300,1201,10) * 1e-9
+wavelengths = np.linspace(300,1200,50) * 1e-9
 
 options = default_options()
 options.wavelength = wavelengths
-options.only_incidence_angle = True
-options.lookuptable_angles = 200
-options.parallel = True
+# options.only_incidence_angle = True
+# options.lookuptable_angles = 200
+# options.parallel = True
 options.project_name = "perovskite_Si_example"
 options.n_rays = 2000
 options.n_theta_bins = 30
@@ -202,7 +203,7 @@ lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
 ax.set_xlabel("Wavelength (nm)")
 ax.set_ylabel("R/A/T")
 ax.set_xlim(300, 1200)
-ax.set_ylim(0, 1)
+ax.set_ylim(0, 1.1)
 ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
 ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 

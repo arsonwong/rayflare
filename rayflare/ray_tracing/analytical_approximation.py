@@ -374,8 +374,6 @@ def RT_analytical(
                         Rp = R_T_entry[2]
                         Ts = R_T_entry[1]
                         Tp = R_T_entry[3]
-                        As_per_layer = A_entry[0]
-                        Ap_per_layer = A_entry[1]
 
                     reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Rp, R_or_T_s=Rs, A_entry=A_entry)
@@ -453,18 +451,21 @@ def RT_analytical(
             p_component1 = np.sum(all_parent_s_vector*old_p_direction,axis=-1) # rays, wavelength
             p_component2 = np.sum(all_parent_p_vector*old_p_direction,axis=-1)
             p_component = np.sqrt(p_component1**2+p_component2**2) 
+
             s_component_after_scatter = s_component*np.sqrt(all_R_or_T_s) # rays, wavelength
             p_component_after_scatter = p_component*np.sqrt(all_R_or_T_p) # rays, wavelength
             s_vector = s_component_after_scatter[:,:,np.newaxis]*new_s_direction[:,np.newaxis,:] # rays,wavelength,3
             p_vector = p_component_after_scatter[:,:,np.newaxis]*new_p_direction[:,np.newaxis,:]
-            all_parent_intensity = np.sum(all_parent_s_vector**2,axis=-1)+np.sum(all_parent_p_vector**2,axis=-1)
+
             for j in range(num_of_rays):
                 ray_queue[j].polarization = Polarization(s_vector[j], p_vector[j])
                 if ray_queue[j].A_entry is not None:
-                    A_mat += ray_queue[j].normalized_probability*all_parent_intensity[j][:,None]*(s_component[j][:,None]*ray_queue[j].A_entry[0]+p_component[j][:,None]*ray_queue[j].A_entry[1])
-
-        for j in range(num_of_rays):
+                    absorption = s_component[j][:,None]**2*ray_queue[j].A_entry[0]+p_component[j][:,None]**2*ray_queue[j].A_entry[1]
+                    A_mat += ray_queue[j].probability*absorption
+ 
+        for j in range(num_of_rays):          
             ray_queue.extend(ray_queue[j].children)
+
         ray_queue = ray_queue[num_of_rays:]
 
     thetas_local_incidence = np.abs(np.array(thetas_local_incidence))
@@ -528,6 +529,14 @@ def RT_analytical(
     out_mat = np.zeros((len(wl), len(angle_vector))) 
     for l1 in range(len(thetas_out)):
         out_mat[:,bin_out[l1]] += scattered_rays[l1].getIntensity()
+
+    # print(out_mat.shape)
+    # print(A_mat.shape)
+    # sum_ = np.sum(out_mat,axis=1) + np.sum(A_mat,axis=1)
+    # max_sum = np.max(sum_)
+    # if max_sum > 1:
+    #     print(max_sum)
+    #     assert(1==0)
 
     out_mat = COO.from_numpy(out_mat)  # sparse matrix
     A_mat = COO.from_numpy(A_mat)

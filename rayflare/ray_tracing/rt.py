@@ -123,10 +123,10 @@ def RT(
                 lookuptable = xr.open_dataset(os.path.join(structpath, surf_name + ".nc"))
             else:
                 lookuptable = None
-        if lookuptable is not None:
-            if front_or_rear == "rear":
-                # side gets flipped here
-                lookuptable = lookuptable.assign_coords(side=np.flip(lookuptable.side))
+        # if lookuptable is not None:
+        #     if front_or_rear == "rear":
+        #         # side gets flipped here
+        #         lookuptable = lookuptable.assign_coords(side=np.flip(lookuptable.side))
 
         theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
 
