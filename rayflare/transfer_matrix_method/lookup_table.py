@@ -193,15 +193,20 @@ def make_TMM_lookuptable(
                 if profile:
                     profile_coeff_result = np.real(res["profile_coeff"])
 
+                order = list(range(width_differentials_num+num_nk_differentials+1))
+                if side==-1:
+                    order[1:width_differentials_num+1] = order[width_differentials_num:0:-1]
+                    order[width_differentials_num+1:width_differentials_num+num_nk_differentials+1] = order[width_differentials_num+num_nk_differentials:width_differentials_num:-1]
+
                 for i4 in range(width_differentials_num+num_nk_differentials+1):
                     offset = i4*len(wavelengths)*len(thetas)
                     for i3, _ in enumerate(thetas):
-                        R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                        T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                        R_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                        T_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
                         if A_per_layer_result.ndim > 1:
-                            Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                            Alayer_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
                         if profile:
-                            Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :, :] = profile_coeff_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:,:]
+                            Aprof_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :, :] = profile_coeff_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:,:]
 
                 # sometimes get very small negative values (like -1e-20)
                 R_loop[R_loop < 0] = 0

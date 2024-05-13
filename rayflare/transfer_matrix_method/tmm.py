@@ -306,15 +306,20 @@ def TMM(
             if profile:
                 profile_result = np.real(res["profile"])
 
+            order = list(range(width_differentials_num+nk_differentials_num+1))
+            if front_or_rear=='rear':
+                order[1:width_differentials_num+1] = order[width_differentials_num:0:-1]
+                order[width_differentials_num+1:width_differentials_num+nk_differentials_num+1] = order[width_differentials_num+nk_differentials_num:width_differentials_num:-1]
+
             for i4 in range(width_differentials_num+nk_differentials_num+1):
                 offset = i4*len(wavelengths)*len(thetas)
                 for i3, _ in enumerate(thetas):
-                    R_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                    T_loop[i4*len(wavelengths):(i4+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                    R_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+                    T_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
                     if A_per_layer_result.ndim > 1:
-                        Alayer_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        Alayer_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
                     if profile:
-                        Aprof_loop[i3, i4*len(wavelengths):(i4+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+                        Aprof_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
 
             if profile:
                 Aprof_loop[i3, :, :] = res["profile"]
@@ -743,7 +748,7 @@ class tmm_structure:
                     wavelength,
                     width_differentials = width_differentials, 
                     n_list_diff = n_list_diff,
-                    detailed = True
+                    detailed = False
                 )
                 if out['vw_list'] is not None:
                     A_per_layer = tmm.absorp_in_each_layer(out)
