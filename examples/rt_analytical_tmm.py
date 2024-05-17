@@ -405,68 +405,68 @@ def sel_mat(name):
 wavelengths = np.arange(300,1201,10) * 1e-9
 options["wavelength"] = wavelengths
 
-for iter in range(2):
-    t1 = time.time()
+# for iter in range(2):
+#     t1 = time.time()
 
-    options["n_theta_bins"] = 50
-    options["theta_in"] = 0.0
-    options["phi_in"] = 0.0
-    front_materials = [Layer(70e-9, sel_mat("ITO_")), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
-    back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
+#     options["n_theta_bins"] = 50
+#     options["theta_in"] = 0.0
+#     options["phi_in"] = 0.0
+#     front_materials = [Layer(70e-9, sel_mat("ITO_")), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
+#     back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
 
-    surf_pyr_upright = regular_pyramids(upright=True)
-    surf_planar = planar_surface()
-    front_surf_pyr = Interface(
-        "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
-    )
-    front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
-    front_surf_pyr.nk_parameter_differentials = [10e20, None, None]
-    front_surf_planar = Interface(
-        "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
-    )
-    back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
-    back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
-    bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  
-    # roughness = Roughness(np.pi/10)
-    roughness = Roughness(0)
-    linestyle = '-'
-    if iter==1:
-        linestyle = '-.'
-        SC = Structure([front_surf_pyr, roughness, bulk_Si, roughness, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
-    else:
-        SC = Structure([front_surf_pyr, bulk_Si, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
+#     surf_pyr_upright = regular_pyramids(upright=True)
+#     surf_planar = planar_surface()
+#     front_surf_pyr = Interface(
+#         "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+#     )
+#     front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
+#     front_surf_pyr.nk_parameter_differentials = [10e20, None, None]
+#     front_surf_planar = Interface(
+#         "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+#     )
+#     back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+#     back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+#     bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  
+#     # roughness = Roughness(np.pi/10)
+#     roughness = Roughness(0)
+#     linestyle = '-'
+#     if iter==1:
+#         linestyle = '-.'
+#         SC = Structure([front_surf_pyr, roughness, bulk_Si, roughness, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
+#     else:
+#         SC = Structure([front_surf_pyr, bulk_Si, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
 
-    process_structure(SC, options, overwrite=True)
-    results_RT = calculate_RAT(SC, options)
-    print("time: ", time.time()-t1)
+#     process_structure(SC, options, overwrite=True)
+#     results_RT = calculate_RAT(SC, options)
+#     print("time: ", time.time()-t1)
 
-    for iter in range(len(results_RT)):
-        RAT = results_RT[iter]['RAT']
-        wl = RAT['wl']*1e9
-        R = np.array(RAT['R'][0])
-        T = np.array(RAT['T'][0])
-        A = np.array(RAT['A_bulk'][0])
-        plt.plot(wl, R, color='red', linestyle=linestyle)
-        plt.plot(wl, T, color='green', linestyle=linestyle)
-        plt.plot(wl, A, color='purple', linestyle=linestyle)
+#     for iter in range(len(results_RT)):
+#         RAT = results_RT[iter]['RAT']
+#         wl = RAT['wl']*1e9
+#         R = np.array(RAT['R'][0])
+#         T = np.array(RAT['T'][0])
+#         A = np.array(RAT['A_bulk'][0])
+#         plt.plot(wl, R, color='red', linestyle=linestyle)
+#         plt.plot(wl, T, color='green', linestyle=linestyle)
+#         plt.plot(wl, A, color='purple', linestyle=linestyle)
 
-    for iter in range(len(SC.RAT1st['wl'])):
-        wl = SC.RAT1st['wl'][iter]*1e9
-        R1st = SC.RAT1st['R'][iter]
-        plt.plot(wl, R1st, color='red', linestyle=linestyle)
-        A1st = SC.RAT1st['T'][iter]
-        plt.plot(wl, A1st, color='purple', linestyle=linestyle)
+#     for iter in range(len(SC.RAT1st['wl'])):
+#         wl = SC.RAT1st['wl'][iter]*1e9
+#         R1st = SC.RAT1st['R'][iter]
+#         plt.plot(wl, R1st, color='red', linestyle=linestyle)
+#         A1st = SC.RAT1st['T'][iter]
+#         plt.plot(wl, A1st, color='purple', linestyle=linestyle)
 
-plt.title('HJT Cell')
-plt.xlabel('Wavelength (nm)')
-plt.ylabel('RAT')
-plt.ylim(0, 1)
-plt.legend(loc=0)
-plt.show()
+# plt.title('HJT Cell')
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('RAT')
+# plt.ylim(0, 1)
+# plt.legend(loc=0)
+# plt.show()
 
-t1 = time.time()
+# t1 = time.time()
 
-assert(1==0)
+# assert(1==0)
 
 
 
@@ -476,7 +476,7 @@ t1 = time.time()
 options["n_theta_bins"] = 50
 options["theta_in"] = 0.0
 options["phi_in"] = 0.0
-front_materials = [{'layer':Layer(70e-9, sel_mat("ITO_")),'parameter':0.5e20}, Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
+front_materials = [Layer(70e-9, sel_mat("ITO_"), nk_parameter=1e21), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
 back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
 
 surf_pyr_upright = regular_pyramids(upright=True)
@@ -484,16 +484,17 @@ surf_planar = planar_surface()
 front_surf_pyr = Interface(
     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
 )
-front_surf_pyr.width_differentials = [7e-9, 10e-10, 10e-10]
-front_surf_pyr.nk_parameter_differentials = [1e19, None, None]
+front_surf_pyr.width_differentials = [30e-9, None, None]
+front_surf_pyr.nk_parameter_differentials = [1e21, None, None]
 front_surf_planar = Interface(
     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
 )
+roughness = Roughness(np.pi/10)
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_pyr.width_differentials = [10e-10, 10e-10, 7e-9]
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
 bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
-SC = Structure([front_surf_pyr, bulk_Si, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
+SC = Structure([front_surf_pyr, roughness, bulk_Si, roughness, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
 
 process_structure(SC, options, overwrite=True)
 results_RT = calculate_RAT(SC, options)
@@ -508,6 +509,10 @@ for iter in range(len(results_RT)):
     plt.plot(wl, R, color='red', linestyle='-')
     plt.plot(wl, T, color='green', linestyle='-')
     plt.plot(wl, A, color='purple', linestyle='-')
+    if iter==1:
+        R_ = np.copy(R)
+        T_ = np.copy(T)
+        A_ = np.copy(A)
 
 for iter in range(len(SC.RAT1st['wl'])):
     wl = SC.RAT1st['wl'][iter]*1e9
@@ -515,6 +520,55 @@ for iter in range(len(SC.RAT1st['wl'])):
     plt.plot(wl, R1st, color='red', linestyle='-')
     A1st = SC.RAT1st['T'][iter]
     plt.plot(wl, A1st, color='purple', linestyle='-')
+    if iter==1:
+        R1st_ = np.copy(R1st)
+        A1st_ = np.copy(A1st)
+
+
+front_materials = [Layer(100e-9, sel_mat("ITO_")), Layer(5e-9, sel_mat("aSip_")), Layer(3e-9, sel_mat("aSii_"))]
+back_materials = [Layer(3e-9, sel_mat("aSii_")), Layer(5e-9, sel_mat("aSin_")), Layer(70e-9, sel_mat("ITO_"))]
+
+surf_pyr_upright = regular_pyramids(upright=True)
+surf_planar = planar_surface()
+front_surf_pyr = Interface(
+    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
+)
+front_surf_planar = Interface(
+    "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True
+)
+roughness = Roughness(np.pi/10)
+back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
+back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
+SC = Structure([front_surf_pyr, roughness, bulk_Si, roughness, back_surf_pyr], incidence=Air, transmission=Air, light_trapping_onset_wavelength = 900e-9)
+
+process_structure(SC, options, overwrite=True)
+results_RT = calculate_RAT(SC, options)
+print("time: ", time.time()-t1)
+
+for iter in range(len(results_RT)):
+    RAT = results_RT[iter]['RAT']
+    wl = RAT['wl']*1e9
+    R = np.array(RAT['R'][0])
+    T = np.array(RAT['T'][0])
+    A = np.array(RAT['A_bulk'][0])
+    plt.plot(wl, R, color='red', linestyle='-.')
+    plt.plot(wl, T, color='green', linestyle='-.')
+    plt.plot(wl, A, color='purple', linestyle='-.')
+    print(np.max(np.abs(R-R_)))
+    print(np.max(np.abs(A-A_)))
+    print(np.max(np.abs(T-T_)))
+
+for iter in range(len(SC.RAT1st['wl'])):
+    wl = SC.RAT1st['wl'][iter]*1e9
+    R1st = SC.RAT1st['R'][iter]
+    plt.plot(wl, R1st, color='red', linestyle='-.')
+    A1st = SC.RAT1st['T'][iter]
+    plt.plot(wl, A1st, color='purple', linestyle='-.')
+    print(np.max(np.abs(R1st-R1st_)))
+    print(np.max(np.abs(A1st-A1st_)))
+
+
 
 plt.title('HJT Cell')
 plt.xlabel('Wavelength (nm)')
@@ -526,7 +580,7 @@ plt.show()
 t1 = time.time()
 
 
-
+assert(1==0)
 
 # differential
 t1 = time.time()
