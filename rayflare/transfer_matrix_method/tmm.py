@@ -748,7 +748,7 @@ class tmm_structure:
                     wavelength,
                     width_differentials = width_differentials, 
                     n_list_diff = n_list_diff,
-                    detailed = False
+                    detailed = True
                 )
                 if out['vw_list'] is not None:
                     A_per_layer = tmm.absorp_in_each_layer(out)

@@ -1,6 +1,23 @@
 import numpy as np
 import os
 import sys
+import pandas as pd
+
+# 2024-05-12 Johnson to fit to experimental data:
+# altered the perovskite long wavelength absorption (raised)
+# thickened perovskite layer
+# make c-Si front, rear have heavy ITO
+# altered MgF2 and front AZO thicknesses
+# thinned C60 to virtually zero 
+
+shading = 0.15
+EQE_data = pd.read_csv(r'tandem cell experimental EQE\combined_EQE.txt', sep='\t')
+PVL_spectrum = pd.read_csv(r'tandem cell experimental EQE\PVL_Spectrum.txt', sep='\t')
+PVL_spectrum = np.array([np.array(PVL_spectrum['Wavelength (nm)']), np.array(PVL_spectrum['Cumulative photon flux (cm-2 s-1)'])])
+PVL_spectrum = np.transpose(PVL_spectrum)
+PVL_spectrum[:-1,1] = PVL_spectrum[1:,1]-PVL_spectrum[:-1,1]
+PVL_spectrum = PVL_spectrum[:-1,:]
+print(1.602e-19*np.sum(PVL_spectrum[:,1]))
 
 sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
@@ -45,20 +62,23 @@ cur_path = os.path.dirname(os.path.abspath(__file__))
 # new materials from data (only need to add once, uncomment following lines to do so:
 
 # from solcore.material_system import create_new_material
-# create_new_material('Perovskite_CsBr_1p6eV', os.path.join(cur_path, 'data/CsBr10p_1to2_n_shifted.txt'), os.path.join(cur_path, 'data/CsBr10p_1to2_k_shifted.txt'))
-# create_new_material('ITO_lowdoping', os.path.join(cur_path, 'data/model_back_ito_n.txt'), os.path.join(cur_path, 'data/model_back_ito_k.txt'))
-# create_new_material('Ag_Jiang', os.path.join(cur_path, 'data/Ag_UNSW_n.txt'), os.path.join(cur_path, 'data/Ag_UNSW_k.txt'))
-# create_new_material('aSi_i', os.path.join(cur_path, 'data/model_i_a_silicon_n.txt'),os.path.join(cur_path, 'data/model_i_a_silicon_k.txt'))
-# create_new_material('aSi_p', os.path.join(cur_path, 'data/model_p_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_p_a_silicon_k.txt'))
-# create_new_material('aSi_n', os.path.join(cur_path, 'data/model_n_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_n_a_silicon_k.txt'))
-# create_new_material('MgF2_RdeM', os.path.join(cur_path, 'data/MgF2_RdeM_n.txt'), os.path.join(cur_path, 'data/MgF2_RdeM_k.txt'))
-# create_new_material('C60', os.path.join(cur_path, 'data/C60_Ren_n.txt'), os.path.join(cur_path, 'data/C60_Ren_k.txt'))
-# create_new_material('IZO', os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_n.txt'), os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_k.txt'))
+# # create_new_material('Perovskite_CsBr_1p6eV', os.path.join(cur_path, 'data/CsBr10p_1to2_n_shifted.txt'), os.path.join(cur_path, 'data/CsBr10p_1to2_k_shifted.txt'))
+# create_new_material('Perovskite_CsBr_1p6eV', os.path.join(cur_path, 'data/CsBr10p_1to2_n_shifted.txt'), os.path.join(cur_path, 'data/CsBr10p_1to2_k_shifted_mod.txt'))
+
+# create_new_material('front_ITO', os.path.join(cur_path, 'data/model_med_back_ito_n.txt'), os.path.join(cur_path, 'data/model_med_back_ito_k.txt'))
+# create_new_material('ITO_lowdoping', os.path.join(cur_path, 'data/model_heavy_back_ito_n.txt'), os.path.join(cur_path, 'data/model_heavy_back_ito_k.txt'))
+# # create_new_material('Ag_Jiang', os.path.join(cur_path, 'data/Ag_UNSW_n.txt'), os.path.join(cur_path, 'data/Ag_UNSW_k.txt'))
+# # create_new_material('aSi_i', os.path.join(cur_path, 'data/model_i_a_silicon_n.txt'),os.path.join(cur_path, 'data/model_i_a_silicon_k.txt'))
+# # create_new_material('aSi_p', os.path.join(cur_path, 'data/model_p_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_p_a_silicon_k.txt'))
+# # create_new_material('aSi_n', os.path.join(cur_path, 'data/model_n_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_n_a_silicon_k.txt'))
+# # create_new_material('MgF2_RdeM', os.path.join(cur_path, 'data/MgF2_RdeM_n.txt'), os.path.join(cur_path, 'data/MgF2_RdeM_k.txt'))
+# # create_new_material('C60', os.path.join(cur_path, 'data/C60_Ren_n.txt'), os.path.join(cur_path, 'data/C60_Ren_k.txt'))
+# # create_new_material('IZO', os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_n.txt'), os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_k.txt'))
 
 
 # matrix multiplication
-# wavelengths = np.arange(300,1201,10) * 1e-9
-wavelengths = np.linspace(300,1200,50) * 1e-9
+wavelengths = np.arange(300,1201,5) * 1e-9
+# wavelengths = np.linspace(300,1200,50) * 1e-9
 
 options = default_options()
 options.wavelength = wavelengths
@@ -78,6 +98,7 @@ Si = material("Si")()
 Air = material("Air")()
 MgF2 = material("MgF2_RdeM")()
 ITO_back = material("ITO_lowdoping")()
+ITO_front = material("front_ITO")()
 Perovskite = material("Perovskite_CsBr_1p6eV")()
 Ag = material("Ag_Jiang")()
 aSi_i = material("aSi_i")()
@@ -92,18 +113,20 @@ Spiro = [12, np.array([0, 1]), np.array([1.65, 1.65]), np.array([0, 0])]
 SnO2 = [10, np.array([0, 1]), np.array([2, 2]), np.array([0, 0])]
 
 # stack based on doi:10.1038/s41563-018-0115-4
+# alter C60 layer to 1e-9 instead of 15e-9
 front_materials = [
-    Layer(100e-9, MgF2),
-    Layer(110e-9, IZO),
+    Layer(160e-9, MgF2),
+    Layer(80e-9, IZO),
     SnO2,
-    Layer(15e-9, C60),
+    Layer(5e-9, C60), 
     Layer(1e-9, LiF),
-    Layer(440e-9, Perovskite),
-    Spiro,
+    Layer(500e-9, Perovskite),
+    Layer(250e-9, ITO_front),
     Layer(6.5e-9, aSi_n),
     Layer(6.5e-9, aSi_i),
 ]
-back_materials = [Layer(6.5e-9, aSi_i), Layer(6.5e-9, aSi_p), Layer(240e-9, ITO_back)]
+
+back_materials = [Layer(6.5e-9, aSi_i), Layer(6.5e-9, aSi_p), Layer(250e-9, ITO_back)]
 
 # whether pyramids are upright or inverted is relative to front incidence.
 # so if the same etch is applied to both sides of a slab of silicon, one surface
@@ -146,14 +169,15 @@ R_0 = R_per_pass[0]
 R_escape = np.sum(R_per_pass[1:, :], 0)
 
 # only select absorbing layers, sum over passes
-results_per_layer_front = np.sum(results_per_pass["a"][0], 0)[:, [0, 1, 3, 5, 7, 8]]
+results_per_layer_front = np.sum(results_per_pass["a"][0], 0)[:, [0, 1, 3, 6, 7, 8]]
+results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
 
 results_per_layer_back = np.sum(results_per_pass["a"][1], 0)
 
 
 allres = np.flip(
     np.hstack(
-        (R_0[:, None], R_escape[:, None], results_per_layer_front, RAT["A_bulk"].T, results_per_layer_back, RAT["T"].T)
+        (R_0[:, None], R_escape[:, None], results_per_layer_front, results_per_layer_back, RAT["T"].T, results_pero, RAT["A_bulk"].T)
     ),
     1,
 )
@@ -164,17 +188,25 @@ spectr_flux = LightSource(
     source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
 ).spectrum(wavelengths)[1]
 
+A_Si = RAT["A_bulk"][0]
+A_pero = results_pero[:,0]
 Jph_Si = q * np.trapz(RAT["A_bulk"][0] * spectr_flux, wavelengths) / 10  # mA/cm2
-Jph_Perovskite = q * np.trapz(results_per_layer_front[:, 3] * spectr_flux, wavelengths) / 10  # mA/cm2
+Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
-pal = sns.cubehelix_palette(13, start=0.5, rot=-0.9)
-pal.reverse()
+print(A_Si.shape)
+print(A_pero.shape)
+print(spectr_flux.shape)
+print(wavelengths.shape)
+output = np.vstack((wavelengths,spectr_flux,A_pero,A_Si))
+output = output.T
+# Define column headers
+headers = ['wavelength', 'spectrum flux', 'A pero', 'A Si']
+# Convert NumPy array to pandas DataFrame with headers
+df = pd.DataFrame(output, columns=headers)
+df.to_csv('example_pero_Si_EQEs.txt', sep='\t', index=False)
 
-from scipy.ndimage.filters import gaussian_filter1d
 
-ysmoothed = gaussian_filter1d(allres, sigma=2, axis=0)
-
-bulk_A_text = ysmoothed[:, 4]
+pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
 
 # plot total R, A, T
 fig = plt.figure(figsize=(5, 4))
@@ -183,14 +215,15 @@ ax.stackplot(
     options["wavelength"] * 1e9,
     allres.T,
     labels=[
-        "Ag",
-        "ITO",
-        "aSi-n",
-        "aSi-i",
         "c-Si (bulk)",
-        "aSi-i",
-        "aSi-p",
         "Perovskite",
+        "Ag",
+        "rear ITO",
+        "aSi-p",
+        "aSi-i",
+        "aSi-i",
+        "aSi-n",
+        "front ITO",
         "C$_{60}$",
         "IZO",
         "MgF$_2$",
@@ -199,21 +232,88 @@ ax.stackplot(
     ],
     colors=pal,
 )
+ax.plot(EQE_data['# Wavelength (nm)'][12:].values,EQE_data['bottom EQE (%)'].values[12:]/(1-shading), marker='.', linestyle='', markersize=10, color='red')
+ax.plot(EQE_data['# Wavelength (nm)'][:15].values,(EQE_data['top EQE(%)'].values+EQE_data['bottom EQE (%)'].values)[:15]/(1-shading), marker='.', linestyle='', markersize=10, color='blue')
+# ax.plot(wavelengths*1e9,A_pero*(1-shading))
+# ax.plot(wavelengths*1e9,A_Si*(1-shading))
+
+min_wl = np.ceil(np.min(wavelengths*1e9))
+max_wl = np.floor(np.max(wavelengths*1e9))
+min_wl = min_wl.astype(int)
+max_wl = max_wl.astype(int)
+Jsc = 0.0
+Jsc_ph = 0.0
+q = 1.602e-19
+for wl in range(min_wl,max_wl+1):
+    EQE_ = np.interp(float(wl), wavelengths*1e9, A_pero)
+    spectrum_ = np.interp(float(wl), PVL_spectrum[:,0], PVL_spectrum[:,1])
+    Jsc += EQE_*spectrum_
+    Jsc_ph += spectrum_
+Jsc = q*Jsc
+Jsc_ph = q*Jsc_ph
+print(Jsc)
+print(Jsc_ph)
+
+Jsc = 0.0
+Jsc_ph = 0.0
+q = 1.602e-19
+for wl in range(min_wl,max_wl+1):
+    EQE_ = np.interp(float(wl), wavelengths*1e9, A_Si)
+    spectrum_ = np.interp(float(wl), PVL_spectrum[:,0], PVL_spectrum[:,1])
+    Jsc += EQE_*spectrum_
+    Jsc_ph += spectrum_
+Jsc = q*Jsc
+Jsc_ph = q*Jsc_ph
+print(Jsc)
+print(Jsc_ph)
+
+
+min_wl = np.ceil(np.min(EQE_data['# Wavelength (nm)']))
+max_wl = np.floor(np.max(EQE_data['# Wavelength (nm)']))
+min_wl = min_wl.astype(int)
+max_wl = max_wl.astype(int)
+Jsc = 0.0
+Jsc_ph = 0.0
+q = 1.602e-19
+for wl in range(min_wl,max_wl+1):
+    EQE_ = np.interp(float(wl), EQE_data['# Wavelength (nm)'].values, EQE_data['top EQE(%)'].values)
+    spectrum_ = np.interp(float(wl), PVL_spectrum[:,0], PVL_spectrum[:,1])
+    Jsc += EQE_*spectrum_
+    Jsc_ph += spectrum_
+Jsc = q*Jsc
+Jsc_ph = q*Jsc_ph
+print(Jsc)
+print(Jsc_ph)
+
+Jsc = 0.0
+Jsc_ph = 0.0
+q = 1.602e-19
+for wl in range(min_wl,max_wl+1):
+    EQE_ = np.interp(float(wl), EQE_data['# Wavelength (nm)'].values, EQE_data['bottom EQE (%)'].values)
+    spectrum_ = np.interp(float(wl), PVL_spectrum[:,0], PVL_spectrum[:,1])
+    Jsc += EQE_*spectrum_
+    Jsc_ph += spectrum_
+Jsc = q*Jsc
+Jsc_ph = q*Jsc_ph
+print(Jsc)
+print(Jsc_ph)
+
 lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
 ax.set_xlabel("Wavelength (nm)")
 ax.set_ylabel("R/A/T")
 ax.set_xlim(300, 1200)
-ax.set_ylim(0, 1.1)
+ax.set_ylim(0, 1.0)
 ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
 ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 
 fig.savefig("perovskite_Si_summary.pdf", bbox_inches="tight", format="pdf")
 plt.show()
 
+assert(1==0)
 
 label = [str(x) if (x) % 5 == 0 else None for x in np.arange(22)]
 
-pal = sns.cubehelix_palette(24, start=2.8, rot=0.7)
+pal = sns.cubehelix_palette(24, start=2.8, rot=0.9)
 pal.reverse()
 fig = plt.figure(figsize=(8, 3.5))
 ax = fig.add_subplot(1, 2, 1)

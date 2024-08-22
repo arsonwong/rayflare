@@ -599,7 +599,7 @@ def matrix_multiplication(
 
                     # rewrite as f string:
 
-                    logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+                    # logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
 
                     i2 += 1
 
@@ -640,7 +640,7 @@ def matrix_multiplication(
                     vf_1[i1] = dot_wl(Rb[i1], vf_2[i1])  # reflect from front surface
                     A[i1].append(np.sum(vb_2[i1], 1) - np.sum(vf_2[i1], 1))
                     power = np.sum(vf_1[i1], axis=1)
-                    logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+                    # logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
 
                     vr, vt, a = append_per_pass_info(
                         i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab
