@@ -356,9 +356,10 @@ def RT_analytical(
                 horizontal_hit_prob = horizontal_cos_inc * area[relevant_face]
                 horizontal_hit_prob[horizontal_cos_inc < 0] = 0
                 total_hit_prob[index] = np.sum(horizontal_hit_prob)
+                hit_prob[index][horizontal_hit_prob==0] = 0
+                horizontal_hit_prob[horizontal_hit_prob==0] = 1
                 if total_hit_prob[index] > 0:
                     hit_prob[index] = hit_prob[index]**2/horizontal_hit_prob
-                hit_prob[index][horizontal_hit_prob==0] = 0
 
         hit_prob = hit_prob / total_hit_prob
         total_hit_prob = np.sum(hit_prob, axis=1)
