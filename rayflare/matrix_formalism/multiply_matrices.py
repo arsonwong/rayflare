@@ -730,7 +730,7 @@ def matrix_multiplication(
                 grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass})
 
         else:
-            RAT = xr.merge([R])
+            RAT = xr.merge([R, Tfirst])
             results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
 
             grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass})

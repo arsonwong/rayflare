@@ -301,9 +301,16 @@ def RT(
                     R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
                     A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
 
-            if only_incidence_angle: # make only perpendicular incidence for now
-                allres = [RT_analytical(
-                    angles_in[0],
+            if only_incidence_angle: 
+                theta_in = options["theta_in"]
+                if options["theta_in"]==0:
+                    theta_in = 0.0001
+                phi_in = options["phi_in"]
+                if options["phi_in"]==0:
+                    phi_in = 0.0001
+                angle_in = [0,theta_in,phi_in]
+                res = RT_analytical(
+                    angle_in,
                     stacked_wavelengths,
                     n0,
                     n1,
@@ -320,22 +327,26 @@ def RT(
                     radian_table,
                     R_T_table,
                     A_table,
-                    side)]
+                    side)
+                bin_in = res[-1]
                 A_mat = np.zeros((len(stacked_wavelengths), n_absorbing_layers))
                 out_mat = np.zeros((len(stacked_wavelengths), len(angle_vector))) 
                 out_mat = COO.from_numpy(out_mat)  # sparse matrix
                 A_mat = COO.from_numpy(A_mat)
                 local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
                 local_angle_mat = COO.from_numpy(local_angle_mat)
+                allres = []
                 for i1 in range(angles_in.shape[0]):
-                    if i1 > 0:
+                    if i1 == bin_in:
+                        allres.append(res)
+                    else:
                         allres.append([out_mat, A_mat, local_angle_mat])
             else:
 
                 # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
                 # multiprocessing not working, for some reason
                 # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s
-                allres = Parallel(n_jobs=4)(
+                allres = Parallel(n_jobs=1)(
                     delayed(RT_analytical)(
                         angles_in[i1],
                         stacked_wavelengths,

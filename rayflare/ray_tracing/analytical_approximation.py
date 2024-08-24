@@ -67,6 +67,7 @@ class Ray:
         self.children = []
         self.polarization = None
         self.propagated = False
+        self.scatter_history = 0
         self.memorized_items = []
         self.R_or_T_s = R_or_T_s
         self.R_or_T_p = R_or_T_p
@@ -83,6 +84,8 @@ class Ray:
             self.polarization = Polarization(s_vector, p_vector)
         if parent:
             self.probability = self.normalized_probability*parent.probability
+            self.scatter_history = parent.scatter_history + 1
+
 
     def getIntensity(self):
         return self.probability*self.polarization.getIntensity()
@@ -336,11 +339,45 @@ def RT_analytical(
         angle_inc = np.arccos(cos_inc)
         hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
         hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
-        hit_prob = hit_prob / np.sum(hit_prob, axis=1)[:, None]
 
+        total_hit_prob = np.sum(hit_prob, axis=1)[:, None]
+        indices = np.where(ray_directions[:, 2] > 0)[0]
+        if len(indices) > 0:
+            for index in indices:
+                horizontal_ray_direction = np.copy(ray_directions[index])
+                horizontal_ray_direction[2] = 0
+                horizontal_ray_direction = horizontal_ray_direction/np.sqrt(np.sum(horizontal_ray_direction**2))
+                horizontal_cos_inc = -np.dot(horizontal_ray_direction, normals[relevant_face].T)
+                horizontal_hit_prob = horizontal_cos_inc * area[relevant_face]
+                horizontal_hit_prob[horizontal_cos_inc < 0] = 0
+                total_hit_prob[index] = np.sum(horizontal_hit_prob)
+                if total_hit_prob[index] > 0:
+                    hit_prob[index] = hit_prob[index]**2/horizontal_hit_prob
+                hit_prob[index][horizontal_hit_prob==0] = 0
+
+        hit_prob = hit_prob / total_hit_prob
+        total_hit_prob = np.sum(hit_prob, axis=1)
+        indices = np.where(total_hit_prob < 0.99999)[0]
+        if len(indices) > 0:
+            for index in indices:
+                # reflected_ray = copy.deepcopy(ray_queue[index])
+                # ray_queue[index].parent.children.append(reflected_ray)
+                # scattered_rays.append(reflected_ray)
+
+                outbound_prob = 1 - total_hit_prob[index]
+                reflected_ray = Ray(direction = np.copy(ray_directions[index]), probability = 1, parent=ray_queue[index].parent, 
+                                        angle_inc=ray_queue[index].angle_inc, scatter_plane_normal=ray_queue[index].scatter_plane_normal, 
+                                        R_or_T_p=np.copy(ray_queue[index].R_or_T_p), R_or_T_s=np.copy(ray_queue[index].R_or_T_s), 
+                                        A_entry=np.copy(ray_queue[index].A_entry))
+                reflected_ray.probability = ray_queue[index].probability*outbound_prob
+                ray_queue[index].parent.children.append(reflected_ray)
+                scattered_rays.append(reflected_ray)
+
+                # scattered_rays.append(ray_queue[index])
         for i in range(how_many_faces):
             normal_component = -np.dot(cos_inc[:,i][:,None],normals[i][None,:])
             reflected_directions = ray_directions - 2 * normal_component
+
             reflected_directions = reflected_directions / np.linalg.norm(reflected_directions, axis=1)[:, None]
             # for now, approximate long wavelength limit for n0, n1, so the refracted angle is the same for all wavelengths considered
             tr_par = (np.real(n0[-1]) / np.real(n1[-1])) * (ray_directions - normal_component)
@@ -384,11 +421,13 @@ def RT_analytical(
                     # else:
                     #     A_mat += hit_prob[j][i]*ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
                     ray_queue[j].children.append(reflected_ray)
-                    if np.sign(reflected_directions[j][2])==1:
+                    if False: #np.sign(reflected_directions[j][2])==1:
                         scattered_rays.append(reflected_ray)
                     else:
                         ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
+                        if refracted_directions[j][2] > 0:
+                            refracted_directions[j][2] *= -1
                         transmitted_ray = Ray(direction = refracted_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
                                         angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Tp, R_or_T_s=Ts)
                         # transmitted_ray.propagate_R_or_T()
@@ -494,6 +533,17 @@ def RT_analytical(
     phi_ind = phis_out/unit_distance
     bin_out = theta_first_index[binned_theta_out] + phi_ind.astype(int)
 
+    binned_theta_in = np.digitize(theta_in, theta_intv, right=True) - 1
+    unit_distance = phi_sym/N_azimuths[binned_theta_in]
+    phi_ind = phi_in/unit_distance
+    bin_in = theta_first_index[binned_theta_in] + phi_ind.astype(int)
+
+    # print(theta_in)
+    # print(phi_in)
+    # print(binned_theta_in)
+    # print(theta_intv)
+    # assert(1==0)
+
     # phis_out = xr.DataArray(
     #     phis_out,
     #     coords={"theta_bin": (["angle_in"], binned_theta_out)},
@@ -530,6 +580,15 @@ def RT_analytical(
     for l1 in range(len(thetas_out)):
         out_mat[:,bin_out[l1]] += scattered_rays[l1].getIntensity()
 
+    # record_ = [0,0,0,0,0]
+    # for scattered_ray in scattered_rays:
+    #     if scattered_ray.direction[2] > 0:
+    #         index = int(scattered_ray.scatter_history)
+    #         record_[index] += scattered_ray.probability
+    # print(record_)
+    # assert(1==0)
+
+
     # print(out_mat.shape)
     # print(A_mat.shape)
     # sum_ = np.sum(out_mat,axis=1) + np.sum(A_mat,axis=1)
@@ -547,10 +606,10 @@ def RT_analytical(
         local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
         local_angle_mat = COO.from_numpy(local_angle_mat)
 
-        return out_mat, A_mat, local_angle_mat
+        return out_mat, A_mat, local_angle_mat, bin_in
 
     else:
-        return out_mat, A_mat
+        return out_mat, A_mat, bin_in
 
 
 
