@@ -341,6 +341,11 @@ def RT_analytical(
         hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
 
         total_hit_prob = np.sum(hit_prob, axis=1)[:, None]
+        # if a ray is pointing upwards, it still has a chance to scatter off a surface on the way up
+        # we make the approximation that the likelyhood it will scatter off a surface to be
+        # Likelyhood = (subtended area of surface for the ray direction)^2/
+        # (subtended area of the surface for the ray direction if ray were horizontal)/
+        # (sum of subtended areas of all surfaces for the ray direction if ray were horizontal)
         indices = np.where(ray_directions[:, 2] > 0)[0]
         if len(indices) > 0:
             for index in indices:
@@ -360,10 +365,6 @@ def RT_analytical(
         indices = np.where(total_hit_prob < 0.99999)[0]
         if len(indices) > 0:
             for index in indices:
-                # reflected_ray = copy.deepcopy(ray_queue[index])
-                # ray_queue[index].parent.children.append(reflected_ray)
-                # scattered_rays.append(reflected_ray)
-
                 outbound_prob = 1 - total_hit_prob[index]
                 reflected_ray = Ray(direction = np.copy(ray_directions[index]), probability = 1, parent=ray_queue[index].parent, 
                                         angle_inc=ray_queue[index].angle_inc, scatter_plane_normal=ray_queue[index].scatter_plane_normal, 
@@ -372,8 +373,6 @@ def RT_analytical(
                 reflected_ray.probability = ray_queue[index].probability*outbound_prob
                 ray_queue[index].parent.children.append(reflected_ray)
                 scattered_rays.append(reflected_ray)
-
-                # scattered_rays.append(ray_queue[index])
         for i in range(how_many_faces):
             normal_component = -np.dot(cos_inc[:,i][:,None],normals[i][None,:])
             reflected_directions = ray_directions - 2 * normal_component
@@ -421,10 +420,7 @@ def RT_analytical(
                     # else:
                     #     A_mat += hit_prob[j][i]*ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
                     ray_queue[j].children.append(reflected_ray)
-                    if False: #np.sign(reflected_directions[j][2])==1:
-                        scattered_rays.append(reflected_ray)
-                    else:
-                        ray_queue.append(reflected_ray)
+                    ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
                         if refracted_directions[j][2] > 0:
                             refracted_directions[j][2] *= -1
