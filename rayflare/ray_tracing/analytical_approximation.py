@@ -531,6 +531,8 @@ def RT_analytical(
     bin_out = theta_first_index[binned_theta_out] + phi_ind.astype(int)
 
     binned_theta_in = np.digitize(theta_in, theta_intv, right=True) - 1
+    if theta_in==0:
+        binned_theta_in += 1
     unit_distance = phi_sym/N_azimuths[binned_theta_in]
     phi_ind = phi_in/unit_distance
     bin_in = theta_first_index[binned_theta_in] + phi_ind.astype(int)
@@ -594,7 +596,13 @@ def RT_analytical(
     #     print(max_sum)
     #     assert(1==0)
 
-    out_mat = COO.from_numpy(out_mat)  # sparse matrix
+    n_a_in = int(len(angle_vector) / 2)
+    out_mat_backscatter = out_mat[:, :n_a_in]
+    out_mat_forwardscatter = out_mat[:, n_a_in:]
+
+    # out_mat = COO.from_numpy(out_mat)  # sparse matrix
+    out_mat_backscatter = COO.from_numpy(out_mat_backscatter)
+    out_mat_forwardscatter = COO.from_numpy(out_mat_forwardscatter)
     A_mat = COO.from_numpy(A_mat)
 
     if Fr_or_TMM > 0:
@@ -603,10 +611,10 @@ def RT_analytical(
         local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
         local_angle_mat = COO.from_numpy(local_angle_mat)
 
-        return out_mat, A_mat, local_angle_mat, bin_in
+        return out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat, bin_in
 
     else:
-        return out_mat, A_mat, bin_in
+        return out_mat_backscatter, out_mat_forwardscatter, out_mat, A_mat, bin_in
 
 
 

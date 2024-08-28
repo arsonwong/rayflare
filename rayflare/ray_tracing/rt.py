@@ -303,11 +303,11 @@ def RT(
 
             if only_incidence_angle: 
                 theta_in = options["theta_in"]
-                if options["theta_in"]==0:
-                    theta_in = 0.0001
+                # if options["theta_in"]==0:
+                #     theta_in = 0.0001
                 phi_in = options["phi_in"]
-                if options["phi_in"]==0:
-                    phi_in = 0.0001
+                # if options["phi_in"]==0:
+                #     phi_in = 0.0001
                 angle_in = [0,theta_in,phi_in]
                 res = RT_analytical(
                     angle_in,
@@ -330,17 +330,22 @@ def RT(
                     side)
                 bin_in = res[-1]
                 A_mat = np.zeros((len(stacked_wavelengths), n_absorbing_layers))
+                n_a_in = int(len(angle_vector) / 2)
                 out_mat = np.zeros((len(stacked_wavelengths), len(angle_vector))) 
-                out_mat = COO.from_numpy(out_mat)  # sparse matrix
+                out_mat_backscatter = out_mat[:, :n_a_in]
+                out_mat_forwardscatter = out_mat[:, n_a_in:]
+                # out_mat = COO.from_numpy(out_mat)  # sparse matrix
+                out_mat_backscatter = COO.from_numpy(out_mat_backscatter)  # sparse matrix
+                out_mat_forwardscatter = COO.from_numpy(out_mat_forwardscatter)  # sparse matrix
                 A_mat = COO.from_numpy(A_mat)
                 local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
                 local_angle_mat = COO.from_numpy(local_angle_mat)
                 allres = []
                 for i1 in range(angles_in.shape[0]):
                     if i1 == bin_in:
-                        allres.append(res)
+                        allres.append(res[:-1])
                     else:
-                        allres.append([out_mat, A_mat, local_angle_mat])
+                        allres.append([out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat])
             else:
 
                 # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
@@ -370,16 +375,18 @@ def RT(
                     for i1 in range(angles_in.shape[0])
                 )
 
-        allArrays = stack([item[0] for item in allres])
-        absArrays = stack([item[1] for item in allres])
+        allArrays_backscatter = stack([item[0] for item in allres])
+        allArrays_forwardscatter = stack([item[1] for item in allres])
+        absArrays = stack([item[2] for item in allres])
         if analytical_approx:
             # in angles, wavelengths, out angles --> wavelengths, out angles, in angles
-            allArrays = np.transpose(allArrays, (1, 2, 0))
+            allArrays_backscatter = np.transpose(allArrays_backscatter, (1, 2, 0))
+            allArrays_forwardscatter = np.transpose(allArrays_forwardscatter, (1, 2, 0))
             # in angles, wavelengths, layers --> wavelengths, layers, in angles
             absArrays = np.transpose(absArrays, (1, 2, 0))
 
         if save:
-            save_npz(path_or_mats[0], allArrays)
+            # save_npz(path_or_mats[0], allArrays)
             save_npz(path_or_mats[1], absArrays)
 
         if Fr_or_TMM > 0 and calc_profile is not None:
@@ -396,10 +403,10 @@ def RT(
             if save:
                 allres.to_netcdf(path_or_mats[2])
 
-            return allArrays, absArrays, allres
+            return allArrays_backscatter, allArrays_forwardscatter, absArrays, allres
 
         else:
-            return allArrays, absArrays
+            return allArrays_backscatter, allArrays_forwardscatter, absArrays
 
 
 def RT_wl(

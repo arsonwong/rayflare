@@ -236,8 +236,9 @@ def load_redistribution_matrices(
             Is[i1].append([])
 
             if (stored_redistribution_matrices is not None) and (stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]] is not None):
-                fullmat_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][0]
-                absmat_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][1]
+                fullmat_backscatter_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][0]
+                fullmat_forwardscatter_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][1]
+                absmat_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][2]
             else:
                 mat_path = os.path.join(
                     results_path, layer_names[i1] + side_code[front_or_rear] + "RT.npz"
@@ -248,38 +249,30 @@ def load_redistribution_matrices(
                 fullmat_ = load_npz(mat_path)
                 absmat_ = load_npz(absmat_path)
 
-            fullmat = [fullmat_[:num_wl]]
+            fullmat_backscatter = [fullmat_backscatter_[:num_wl]]
+            fullmat_forwardscatter = [fullmat_forwardscatter_[:num_wl]]
             absmat = [absmat_[:num_wl]]
             width_differentials_num = 0
-            if fullmat_.shape[0] > num_wl:
+            if fullmat_backscatter_.shape[0] > num_wl:
                 count = num_wl
-                while(count < fullmat_.shape[0]):
-                    fullmat.append(fullmat_[count:count+num_wl])
+                while(count < fullmat_backscatter_.shape[0]):
+                    fullmat_backscatter.append(fullmat_backscatter_[count:count+num_wl])
+                    fullmat_forwardscatter.append(fullmat_forwardscatter_[count:count+num_wl])
                     absmat.append(absmat_[count:count+num_wl])
                     count += num_wl
                     width_differentials_num += 1
 
             if front_or_rear == 0:  # matrices for front incidence
                 for i2 in range(width_differentials_num+1):
-                    if len(fullmat[i2].shape) == 3:
-                        Rs[i1][front_or_rear].append(fullmat[i2][:, :n_a_in, :])
-                        Ts[i1][front_or_rear].append(fullmat[i2][:, n_a_in:, :])
-                        As[i1][front_or_rear].append(absmat[i2])
-                    else:
-                        Rs[i1][front_or_rear].append(fullmat[i2][:n_a_in, :])
-                        Ts[i1][front_or_rear].append(fullmat[i2][n_a_in:, :])
-                        As[i1][front_or_rear].append(absmat[i2])
-
+                    Rs[i1][front_or_rear].append(fullmat_backscatter[i2])
+                    Ts[i1][front_or_rear].append(fullmat_forwardscatter[i2])
+                    As[i1][front_or_rear].append(absmat[i2])
             else:  # matrices for rear incidence
                 for i2 in range(width_differentials_num+1):
-                    if len(fullmat[i2].shape) == 3:
-                        Rs[i1][front_or_rear].append(fullmat[i2][:, n_a_in:, :])
-                        Ts[i1][front_or_rear].append(fullmat[i2][:, :n_a_in, :])
-                        As[i1][front_or_rear].append(absmat[i2])
-                    else:
-                        Rs[i1][front_or_rear].append(fullmat[i2][n_a_in:, :])
-                        Ts[i1][front_or_rear].append(fullmat[i2][:n_a_in, :])
-                        As[i1][front_or_rear].append(absmat[i2])
+                    Rs[i1][front_or_rear].append(fullmat_backscatter[i2])
+                    Ts[i1][front_or_rear].append(fullmat_forwardscatter[i2])
+                    As[i1][front_or_rear].append(absmat[i2])
+
 
             if calc_prof_list[i1] is not None:
                 profmat_path = os.path.join(
@@ -457,9 +450,9 @@ def matrix_multiplication(
         len_calcs = np.array([len(x) if x is not None else 0 for x in calc_prof_list])
 
         a = [[] for _ in range(n_interfaces)]
-        vr = [[] for _ in range(n_bulks)]
-        vt = [[] for _ in range(n_bulks)]
-        A = [[] for _ in range(n_bulks)]
+        vr = [[] for _ in range(max(1,n_bulks))]
+        vt = [[] for _ in range(max(1,n_bulks))]
+        A = [[] for _ in range(max(1,n_bulks))]
 
         vf_1 = [[] for _ in range(n_interfaces)]
         vb_1 = [[] for _ in range(n_interfaces)]
@@ -604,7 +597,7 @@ def matrix_multiplication(
                     i2 += 1
 
         else:  # no profile calculation in bulk or interfaces
-            for i1 in range(n_bulks):
+            for i1 in range(max(1,n_bulks)):
 
                 vf_1[i1] = dot_wl(Tf[i1], v0)  # pass through front surface
 
@@ -624,6 +617,9 @@ def matrix_multiplication(
 
                 # rep
                 i2 = 1
+
+                if n_bulks==0:
+                    break
 
                 while np.any(power > options["I_thresh"]):
                     vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
@@ -654,7 +650,7 @@ def matrix_multiplication(
         A = [np.array(item) for item in A]
 
         sum_dims = ["bulk_index", "wl"]
-        sum_coords = {"bulk_index": np.arange(0, n_bulks), "wl": options["light_trapping_wavelength"]}
+        sum_coords = {"bulk_index": np.arange(0, max(1,n_bulks)), "wl": options["light_trapping_wavelength"]}
 
         R = xr.DataArray(
             np.array([np.sum(item, (0, 2)) for item in vr]),

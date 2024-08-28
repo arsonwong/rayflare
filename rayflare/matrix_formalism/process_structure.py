@@ -272,7 +272,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     )
 
                     # takes 0.374021s with save, 0.18945 without save
-                    allArrays, absArrays = RT(
+                    allArrays_backscatter, allArrays_forwardscatter, absArrays = RT(
                         group,
                         incidence,
                         substrate,
@@ -306,26 +306,31 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                                         nk_differentials_num += 1
                             angle_num = allArrays.shape[2]
                             SC.RAT1st = {'wl':[], 'R':[], 'A':[], 'T':[]}
-                            allArrays = allArrays.todense()
-                            absArrays = absArrays.todense()
-                            allArrays_ = np.copy(allArrays)
+                            allArrays_backscatter = allArrays_backscatter.todense()
+                            allArrays_backscatter_ = np.copy(allArrays_backscatter)
+                            allArrays_forwardscatter = allArrays_forwardscatter.todense()
+                            allArrays_forwardscatter_ = np.copy(allArrays_forwardscatter)
+                            absArrays = absArrays.todense()                           
                             absArrays_ = np.copy(absArrays)
                             for i in range(0,width_differentials_num+nk_differentials_num+1):
                                 SC.RAT1st['wl'].append(first_pass_wavelength)
                                 SC.RAT1st['R'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:angle_num,0],axis=1))
                                 SC.RAT1st['T'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,angle_num:,0],axis=1))
                                 SC.RAT1st['A'].append(absArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0])
-                            allArrays = allArrays[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
+                            allArrays_backscatter = allArrays_backscatter[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
+                            allArrays_forwardscatter = allArrays_forwardscatter[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
                             absArrays = absArrays[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
                             for i in range(0,width_differentials_num+nk_differentials_num+1):
-                                allArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = allArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
+                                allArrays_backscatter[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = allArrays_backscatter_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
+                                allArrays_forwardscatter[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = allArrays_forwardscatter_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
                                 absArrays[i*light_trapping_wavelength.size:(i+1)*light_trapping_wavelength.size,:,:] = absArrays_[(i+1)*first_pass_wavelength.size-light_trapping_wavelength.size:(i+1)*first_pass_wavelength.size,:,:]
 
-                            allArrays = COO.from_numpy(allArrays)
+                            allArrays_backscatter = COO.from_numpy(allArrays_backscatter)
+                            allArrays_forwardscatter = COO.from_numpy(allArrays_forwardscatter)
                             absArrays = COO.from_numpy(absArrays)
-                        stored_front_redistribution_matrices.append([allArrays,absArrays])
+                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays])
                     else:
-                        stored_rear_redistribution_matrices.append([allArrays,absArrays])
+                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays])
 
             if struct.method == "RT_Fresnel" or struct.method == "RT_analytical_Fresnel":
                 logger.info(f"Ray tracing with Fresnel equations for element {i1} in structure")

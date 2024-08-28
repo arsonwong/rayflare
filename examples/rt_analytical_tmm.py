@@ -500,8 +500,8 @@ front_surf_planar = Interface(
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
 bulk_Si = BulkLayer(1800e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
-SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
-
+# SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
+SC = Structure([front_surf_pyr], incidence=Air, transmission=sel_mat("Si_"))
 process_structure(SC, options, overwrite=True)
 results_RT = calculate_RAT(SC, options)
 print("time: ", time.time()-t1)
