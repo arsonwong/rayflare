@@ -516,8 +516,8 @@ def RT_analytical(
     phis_out = fold_phi(phis_out, phi_sym)
 
     # this is due to the weird nature that R, T matrices are extracted from fullmat which is different for "front" and "rear"
-    if side == -1:
-        thetas_out = np.pi - thetas_out
+    # if side == -1:
+    #     thetas_out = np.pi - thetas_out
 
     if Fr_or_TMM > 0:
         # now we need to make bins for the absorption

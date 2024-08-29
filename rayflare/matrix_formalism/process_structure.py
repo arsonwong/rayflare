@@ -231,7 +231,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         options['wavelength'] = light_trapping_wavelength
                         
                     # only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
-                    allArrays, absArrays = TMM(
+                    allArrays_backscatter, allArrays_forwardscatter, absArrays = TMM(
                         struct.layers,
                         incidence,
                         substrate,
@@ -248,9 +248,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         nk_differentials = struct.nk_parameter_differentials
                     )
                     if side=="front":
-                        stored_front_redistribution_matrices.append([allArrays,absArrays])
+                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays])
                     else:
-                        stored_rear_redistribution_matrices.append([allArrays,absArrays])
+                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays])
 
             if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
                 logger.info(f"Ray tracing with TMM lookup table for element {i1} in structure")

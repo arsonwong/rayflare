@@ -19,6 +19,7 @@ from rayflare.angles import make_angle_vector, fold_phi
 from rayflare.utilities import get_matrices_or_paths, get_wavelength
 
 def make_matrix_J(i1, N, wavelengths, angle_vector, bin_out_r, output_R, output_Alayer, bin_out_t, output_T):
+    n_a_in = int(len(angle_vector)/2)
     fullmat_part = np.zeros((output_R.shape[0], len(angle_vector)))
     index = angle_vector[i1,0]
     fullmat_part[:,bin_out_r[i1]] = output_R[:,index]
@@ -28,9 +29,13 @@ def make_matrix_J(i1, N, wavelengths, angle_vector, bin_out_r, output_R, output_
         # for j1, _ in enumerate(non_nan_indices[0]):
         #     fullmat_part[non_nan_indices[0][j1],bin_out_t[non_nan_indices[0][j1],i1]] = output_T[non_nan_indices[0][j1],index]
         fullmat_part[(non_nan_indices[0],bin_out_t[non_nan_indices[0],i1])] = output_T[non_nan_indices[0],index]
-    fullmat_part = COO.from_numpy(fullmat_part)
+    fullmat_part_backscatter = fullmat_part[:, :n_a_in]
+    fullmat_part_forwardscatter = fullmat_part[:, n_a_in:]
+    fullmat_part_backscatter = COO.from_numpy(fullmat_part_backscatter)
+    fullmat_part_forwardscatter = COO.from_numpy(fullmat_part_forwardscatter)
+    # fullmat_part = COO.from_numpy(fullmat_part)
     A_mat_part = COO.from_numpy(A_mat_part)
-    return fullmat_part, A_mat_part
+    return fullmat_part_backscatter, fullmat_part_forwardscatter, A_mat_part
 
 def TMM(
     layers,
@@ -386,10 +391,11 @@ def TMM(
         non_nan_indices = np.where(~np.isnan(thetas_out_t))
         thetas_out_r = angle_vector_th
         phis_out_r = fold_phi(angle_vector_phi + np.pi, phi_sym)
-        if front_or_rear == "rear":
-            if non_nan_indices[0].size > 0:
-                thetas_out_t[non_nan_indices] = np.pi - thetas_out_t[non_nan_indices]
-            thetas_out_r = np.pi - thetas_out_r
+        # 2024-08-28 don't flip
+        # if front_or_rear == "rear":
+        #     if non_nan_indices[0].size > 0:
+        #         thetas_out_t[non_nan_indices] = np.pi - thetas_out_t[non_nan_indices]
+        #     thetas_out_r = np.pi - thetas_out_r
 
         bin_out_t = -1*np.ones_like(thetas_out_t)
         if non_nan_indices[0].size > 0:
@@ -408,9 +414,12 @@ def TMM(
         mats = Parallel(n_jobs=1)(
                 delayed(make_matrix_J)(i1, angles_in.shape[0], wavelengths, angle_vector.astype(int), bin_out_r, output_R, output_Alayer, bin_out_t, output_T)             
                 for i1 in range(angles_in.shape[0]))
-        fullmat = stack([item[0] for item in mats])
-        A_mat = stack([item[1] for item in mats])
-        fullmat = np.transpose(fullmat, (1, 2, 0)) #(338, 60, 676)-->(60, 676, 338)
+        fullmat_backscatter = stack([item[0] for item in mats])
+        fullmat_forwardscatter = stack([item[1] for item in mats])
+        A_mat = stack([item[2] for item in mats])
+        fullmat_backscatter = np.transpose(fullmat_backscatter, (1, 2, 0))
+        fullmat_forwardscatter = np.transpose(fullmat_forwardscatter, (1, 2, 0))
+        # fullmat = np.transpose(fullmat, (1, 2, 0)) #(338, 60, 676)-->(60, 676, 338)
         A_mat = np.transpose(A_mat, (1, 2, 0)) #(338, 60, 1) --> (60, 1, 338)
 
 
@@ -444,7 +453,8 @@ def TMM(
         # A_mat = stack([item[1] for item in mats])
 
         if save:
-            print(fullmat)
+            pass
+            # print(fullmat)
 
         if profile:
             prof_mat = [make_prof_matrix_wl(wl) for wl in wavelengths]
@@ -465,9 +475,9 @@ def TMM(
             if save:
                 allres.to_netcdf(path_or_mats[2])
 
-            return fullmat, A_mat, allres
+            return fullmat_backscatter, fullmat_forwardscatter, A_mat, allres
 
-        return fullmat, A_mat
+        return fullmat_backscatter, fullmat_forwardscatter, A_mat
 
 
 class tmm_structure:
