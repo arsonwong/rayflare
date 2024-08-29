@@ -85,7 +85,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 0*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -129,7 +129,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 10*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -173,7 +173,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 20*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -217,7 +217,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 30*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -262,7 +262,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 40*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -306,7 +306,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 50*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -350,7 +350,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 60*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -394,7 +394,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 70*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -438,7 +438,7 @@ def sel_mat(name):
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 # back_materials = [Layer(101e-9, sel_mat("Si_"))]
-# options["n_theta_bins"] = 100
+# options["n_theta_bins"] = 50
 # options["only_incidence_angle"] = True
 # options["theta_in"] = 80*np.pi/180
 # options["phi_in"] = 0*np.pi/180
@@ -489,6 +489,8 @@ front_materials = []
 back_materials = [Layer(101e-9, sel_mat("Si_"))]
 
 surf_pyr_upright = regular_pyramids(upright=True, elevation_angle=50)
+print(surf_pyr_upright)
+assert(1==0)
 surf_planar = planar_surface()
 front_surf_pyr = Interface(
     "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True
@@ -579,7 +581,7 @@ t1 = time.time()
 t1 = time.time()
 front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 back_materials = [Layer(101e-9, sel_mat("Si_"))]
-options["n_theta_bins"] = 100
+options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
 options["theta_in"] = 14*np.pi/180
 options["phi_in"] = 0*np.pi/180
@@ -627,7 +629,7 @@ t1 = time.time()
 t1 = time.time()
 front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 back_materials = [Layer(101e-9, sel_mat("Si_"))]
-options["n_theta_bins"] = 100
+options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
 options["theta_in"] = 28*np.pi/180
 options["phi_in"] = 0*np.pi/180
@@ -674,7 +676,7 @@ t1 = time.time()
 t1 = time.time()
 front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
 back_materials = [Layer(101e-9, sel_mat("Si_"))]
-options["n_theta_bins"] = 100
+options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
 options["theta_in"] = 50*np.pi/180
 options["phi_in"] = 0*np.pi/180
@@ -723,7 +725,7 @@ t1 = time.time()
 
 front_materials = [Layer(65e-9, sel_mat("SiNx_")), Layer(20e-9, sel_mat("SiO2_"))]
 back_materials = [Layer(101e-9, sel_mat("Si_"))]
-options["n_theta_bins"] = 100
+options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
 options["theta_in"] = 0*np.pi/180
 options["phi_in"] = 0*np.pi/180
@@ -921,7 +923,7 @@ back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, 
 bulk_Si = BulkLayer(1800e-6, Air, name="Si_bulk")  # bulk thickness in m, make very thick
 SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=sel_mat("Si_"), transmission=Air)
 
-options["n_theta_bins"] = 100
+options["n_theta_bins"] = 50
 options["theta_in"] = 8*np.pi/180
 options["phi_in"] = 67*np.pi/180
 process_structure(SC, options, overwrite=True)

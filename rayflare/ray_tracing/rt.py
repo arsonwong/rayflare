@@ -1788,6 +1788,11 @@ class RTSurface:
                                 at which both the x and y coordinate are minimized.
         """
 
+        if "random_positions" in kwargs:
+            self.random_positions = kwargs["random_positions"]
+        else:
+            self.random_positions = True
+            
         if "height_distribution" in kwargs:
         #     return from a probability distribution instead of fixed values. This
         #     will change the height of the pyramids (assume only pyramids for now)

@@ -314,8 +314,6 @@ def RT_analytical(
     np.sum(np.cross(surface.P_0s - surface.P_1s, surface.P_2s - surface.P_1s, axis=1) ** 2, 1)
     ) / 2
 
-    relevant_face = np.arange(how_many_faces)
-
     # takes 0.0042s to run whole thing
     # after vectorizing, takes 0.0013838 to run whole thing
     # take out propagate R or T, calc intensity: drops down to 0.000745s
@@ -323,6 +321,7 @@ def RT_analytical(
     # define the incident ray
     first_ray = Ray(direction = np.array([np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in), -np.cos(theta_in)]))
     ray_queue = [first_ray]
+    scattered_faces = [None] # keep track of the scattered faces, one or each element in ray queue
 
     # do the analytical ray tracing here
     scattered_rays = []
@@ -335,9 +334,15 @@ def RT_analytical(
         if num_of_rays==0:
             break
         ray_directions = get_ray_directions(ray_queue)
-        cos_inc = -np.dot(ray_directions, normals[relevant_face].T) # dot product, resulting in shape (num of rays, num of faces)
+        cos_inc = -np.dot(ray_directions, normals.T) # dot product, resulting in shape (num of rays, num of faces)
         angle_inc = np.arccos(cos_inc)
-        hit_prob = cos_inc * area[relevant_face] # scale by area of each triangle, still shape (num of rays, num of faces)
+        if iter > 0 and surface.random_positions==False:
+            hit_prob = np.zeros_like(cos_inc)
+            first_indices = np.arange(num_of_rays)
+            second_indices = np.array(opposite_faces[scattered_faces])
+            hit_prob[first_indices,second_indices] = cos_inc[first_indices,second_indices] * area[second_indices]
+        else:
+            hit_prob = cos_inc * area # scale by area of each triangle, still shape (num of rays, num of faces)
         hit_prob[cos_inc < 0] = 0  # if negative, then the ray is shaded from that pyramid face and will never hit it
 
         total_hit_prob = np.sum(hit_prob, axis=1)[:, None]
@@ -352,8 +357,8 @@ def RT_analytical(
                 horizontal_ray_direction = np.copy(ray_directions[index])
                 horizontal_ray_direction[2] = 0
                 horizontal_ray_direction = horizontal_ray_direction/np.sqrt(np.sum(horizontal_ray_direction**2))
-                horizontal_cos_inc = -np.dot(horizontal_ray_direction, normals[relevant_face].T)
-                horizontal_hit_prob = horizontal_cos_inc * area[relevant_face]
+                horizontal_cos_inc = -np.dot(horizontal_ray_direction, normals.T)
+                horizontal_hit_prob = horizontal_cos_inc * area
                 horizontal_hit_prob[horizontal_cos_inc < 0] = 0
                 total_hit_prob[index] = np.sum(horizontal_hit_prob)
                 hit_prob[index][horizontal_hit_prob==0] = 0
@@ -362,7 +367,11 @@ def RT_analytical(
                     hit_prob[index] = hit_prob[index]**2/horizontal_hit_prob
 
         hit_prob = hit_prob / total_hit_prob
+        if iter == max_interactions - 1:
+            hit_prob *= 0
+
         total_hit_prob = np.sum(hit_prob, axis=1)
+            
         indices = np.where(total_hit_prob < 0.99999)[0]
         if len(indices) > 0:
             for index in indices:
@@ -428,6 +437,7 @@ def RT_analytical(
                         scattered_rays.append(reflected_ray)
                     else:
                         ray_queue.append(reflected_ray)
+                        scattered_faces.append(i)
                     if tr_par_length[j] < 1: # not total internally reflected
                         if refracted_directions[j][2] > 0:
                             refracted_directions[j][2] *= -1
@@ -438,6 +448,7 @@ def RT_analytical(
                         scattered_rays.append(transmitted_ray)
 
         ray_queue = ray_queue[num_of_rays:]
+        scattered_faces = scattered_faces[num_of_rays:]
 
     ray_queue = [first_ray]
     for iter in range(max_interactions):
