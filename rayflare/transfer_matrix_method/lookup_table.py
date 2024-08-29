@@ -181,9 +181,11 @@ def make_TMM_lookuptable(
 
                 pass_options["pol"] = pol
                 pass_options["thetas_in"] = thetas
+                if "detailed" in options:
+                    pass_options["detailed"] = options["detailed"]
 
                 res = tmm_struct.calculate(
-                    pass_options, profile=profile, layers=prof_layer_side, width_differentials=width_differentials_, nk_differentials=nk_differentials_
+                    options=pass_options, profile=profile, layers=prof_layer_side, width_differentials=width_differentials_, nk_differentials=nk_differentials_
                 )
 
                 R_result = np.real(res["R"])

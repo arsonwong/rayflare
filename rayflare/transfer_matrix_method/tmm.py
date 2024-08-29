@@ -748,6 +748,10 @@ class tmm_structure:
                 if n_list_diff[i] is not None:
                     n_list_diff[i] = np.tile(n_list_diff[i], num_angles)
 
+        detailed = False
+        if "detailed" in options:
+            detailed = options["detailed"]
+
         if pol in "sp":
             if coherent:
                 out = coh_tmm(
@@ -758,7 +762,7 @@ class tmm_structure:
                     wavelength,
                     width_differentials = width_differentials, 
                     n_list_diff = n_list_diff,
-                    detailed = True
+                    detailed = detailed
                 )
                 if out['vw_list'] is not None:
                     A_per_layer = tmm.absorp_in_each_layer(out)

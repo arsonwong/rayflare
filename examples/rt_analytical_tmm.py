@@ -48,6 +48,7 @@ options.periodic = True
 options.theta_in = 0
 options.n_jobs = -3
 options.depth_spacing_bulk = 1e-7
+options.detailed = False
 
 # Get the current directory
 current_dir = os.getcwd()

@@ -93,6 +93,7 @@ options.ny = 2
 options.depth_spacing = 1e-9
 options.phi_symmetry = np.pi / 2
 options.bulk_profile = False
+options.detailed = True
 
 Si = material("Si")()
 Air = material("Air")()
