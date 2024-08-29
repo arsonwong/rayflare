@@ -372,6 +372,9 @@ def RT_analytical(
                                         R_or_T_p=np.copy(ray_queue[index].R_or_T_p), R_or_T_s=np.copy(ray_queue[index].R_or_T_s), 
                                         A_entry=np.copy(ray_queue[index].A_entry))
                 reflected_ray.probability = ray_queue[index].probability*outbound_prob
+                ray_queue[index].probability *= total_hit_prob[index]
+                if total_hit_prob[index] > 0:
+                    hit_prob[index] /= total_hit_prob[index]
                 ray_queue[index].parent.children.append(reflected_ray)
                 scattered_rays.append(reflected_ray)
         for i in range(how_many_faces):
@@ -421,7 +424,10 @@ def RT_analytical(
                     # else:
                     #     A_mat += hit_prob[j][i]*ray_queue[j].getIntensity()[:,None]*(s_component[:,None]*As_per_layer + p_component[:,None]*Ap_per_layer)
                     ray_queue[j].children.append(reflected_ray)
-                    ray_queue.append(reflected_ray)
+                    if False: #reflected_directions[j][2] > 0 and side==1:
+                        scattered_rays.append(reflected_ray)
+                    else:
+                        ray_queue.append(reflected_ray)
                     if tr_par_length[j] < 1: # not total internally reflected
                         if refracted_directions[j][2] > 0:
                             refracted_directions[j][2] *= -1
