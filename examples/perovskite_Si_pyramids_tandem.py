@@ -142,8 +142,10 @@ front_surf = Interface(
     texture=surf,
     layers=front_materials,
     name="Perovskite_aSi_widthcorr",
-    coherent=True
+    coherent=True,
+    prof_layers=[6] #hopefully with 1-indexed, that is pero
 )
+
 # NOTE: depending on your computer, calculation the absorption profiles in the front surface may cause
 # memory-related errors as it uses extremely large matrices. Hopefully this can be resolved in the future but if this is
 # an issue, replace the above definition of the front surface so that the profiles aren't calculated:

@@ -50,6 +50,7 @@ def TMM(
     front_or_rear="front",
     save=True,
     overwrite=False,
+    lookuptable = None,
     width_differentials = None,
     nk_differentials = None
 ):
@@ -162,6 +163,10 @@ def TMM(
         return path_or_mats
 
     else:
+        if front_or_rear == "front":
+            side = 1
+        else:
+            side = -1
         get_wavelength(options)
         wavelengths = options["wavelength"]
 
@@ -233,6 +238,21 @@ def TMM(
         else:
             pols = [options["pol"]]
 
+        # looking up tables this way is way faster, by 10 times
+        radian_table = lookuptable.coords['angle'].data
+        R_T_table = np.array([lookuptable.loc[dict(side=side, pol='s')]['R'].data, 
+                lookuptable.loc[dict(side=side, pol='s')]['T'].data, 
+                lookuptable.loc[dict(side=side, pol='p')]['R'].data, 
+                lookuptable.loc[dict(side=side, pol='p')]['T'].data])
+        R_T_table = np.transpose(R_T_table,(2,0,1))
+        R_T_table[R_T_table<0] = 0.0
+        # "pol", "wl", "angle", "layer"
+        A_table = np.array([lookuptable.loc[dict(side=side, pol='s')]['Alayer'].data, 
+                    lookuptable.loc[dict(side=side, pol='p')]['Alayer'].data])
+        # "angle", "pol", "wl", "layer"
+        A_table = np.transpose(A_table,(2,0,1,3))
+        A_table[A_table<0] = 0.0
+
         width_differentials_num = 0
         if width_differentials is not None:
             for d in width_differentials:
@@ -246,6 +266,17 @@ def TMM(
 
         num_rows = len(wavelengths)*(width_differentials_num+nk_differentials_num+1)
         stacked_wavelengths = np.tile(wavelengths,width_differentials_num+nk_differentials_num+1)
+
+        if R_T_table.shape[2] > stacked_wavelengths.size:
+                full_wavelength_size = int(R_T_table.shape[2]/(width_differentials_num+nk_differentials_num+1))
+                R_T_table_ = np.copy(R_T_table)
+                A_table_ = np.copy(A_table)
+                R_T_table = R_T_table[:,:,:stacked_wavelengths.size]
+                A_table = A_table[:,:,:stacked_wavelengths.size]
+                for i in range(0,width_differentials_num+nk_differentials_num+1):
+                    R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
+                    A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
+
 
         R = xr.DataArray(
             np.empty((len(pols), num_rows, n_angles)),
@@ -295,61 +326,85 @@ def TMM(
         pass_options["wavelength"] = options["wavelength"]
         pass_options["depth_spacing"] = options["depth_spacing"]
 
+        indices = np.searchsorted(radian_table, thetas, side='right')-1
+        R_T_entries = np.zeros((len(thetas),R_T_table.shape[1],R_T_table.shape[2]))
+        A_entries = np.zeros((len(thetas),A_table.shape[1],A_table.shape[2],A_table.shape[3]))
+        find_ = np.where(indices==radian_table.shape[0]-1)[0]
+        R_T_entries[find_] = R_T_table[indices[find_]]
+        A_entries[find_] = A_table[indices[find_]]
+        find_ = np.where(indices<radian_table.shape[0]-1)[0]
+        dist1 = thetas[find_] - radian_table[indices[find_]]
+        dist2 = radian_table[indices[find_]+1] - thetas[find_]
+        dist1 = dist1[:,None,None]
+        dist2 = dist2[:,None,None]
+        R_T_entries[find_] = (R_T_table[indices[find_]]*dist2 + R_T_table[indices[find_]+1]*dist1)/(dist1+dist2)
+        dist1 = dist1[:,:,:,None]
+        dist2 = dist2[:,:,:,None]
+        A_entries[find_] = (A_table[indices[find_]]*dist2 + A_table[indices[find_]+1]*dist1)/(dist1+dist2)
+
         for pol in pols:
+            if pol=='s':
+                R.loc[dict(pol=pol)] = np.transpose(R_T_entries[:,0,:],(1,0))
+                T.loc[dict(pol=pol)] = np.transpose(R_T_entries[:,1,:],(1,0))
+                Alayer.loc[dict(pol=pol)] = A_entries[:,0,:,:]
+            elif pol=='p':
+                R.loc[dict(pol=pol)] = np.transpose(R_T_entries[:,2,:],(1,0))
+                T.loc[dict(pol=pol)] = np.transpose(R_T_entries[:,3,:],(1,0))
+                Alayer.loc[dict(pol=pol)] = A_entries[:,1,:,:]
 
-            pass_options["pol"] = pol
-            pass_options["thetas_in"] = thetas
+            # pass_options["pol"] = pol
+            # pass_options["thetas_in"] = thetas
 
-            res = tmm_struct.calculate(
-                pass_options, profile=profile, layers=prof_layers, dist=dist, 
-                width_differentials=width_differentials_, nk_differentials=nk_differentials_
-            )
+            # res = tmm_struct.calculate(
+            #     pass_options, profile=profile, layers=prof_layers, dist=dist, 
+            #     width_differentials=width_differentials_, nk_differentials=nk_differentials_
+            # )
 
-            R_result = np.real(res["R"])
-            T_result = np.real(res["T"])
-            A_per_layer_result = np.real(res["A_per_layer"])
-            if profile:
-                profile_result = np.real(res["profile"])
+            # R_result = np.real(res["R"])
+            # T_result = np.real(res["T"])
+            # A_per_layer_result = np.real(res["A_per_layer"])
+            # if profile:
+            #     profile_result = np.real(res["profile"])
 
-            order = list(range(width_differentials_num+nk_differentials_num+1))
-            if front_or_rear=='rear':
-                order[1:width_differentials_num+1] = order[width_differentials_num:0:-1]
-                order[width_differentials_num+1:width_differentials_num+nk_differentials_num+1] = order[width_differentials_num+nk_differentials_num:width_differentials_num:-1]
+            # order = list(range(width_differentials_num+nk_differentials_num+1))
+            # if front_or_rear=='rear':
+            #     order[1:width_differentials_num+1] = order[width_differentials_num:0:-1]
+            #     order[width_differentials_num+1:width_differentials_num+nk_differentials_num+1] = order[width_differentials_num+nk_differentials_num:width_differentials_num:-1]
 
-            for i4 in range(width_differentials_num+nk_differentials_num+1):
-                offset = i4*len(wavelengths)*len(thetas)
-                for i3, _ in enumerate(thetas):
-                    R_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                    T_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
-                    if A_per_layer_result.ndim > 1:
-                        Alayer_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
-                    if profile:
-                        Aprof_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+            # for i4 in range(width_differentials_num+nk_differentials_num+1):
+            #     offset = i4*len(wavelengths)*len(thetas)
+            #     for i3, _ in enumerate(thetas):
+            #         R_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = R_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+            #         T_loop[order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), i3] = T_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
+            #         if A_per_layer_result.ndim > 1:
+            #             Alayer_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
+            #         if profile:
+            #             Aprof_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = profile_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
 
-            if profile:
-                Aprof_loop[i3, :, :] = res["profile"]
+            # if profile:
+            #     Aprof_loop[i3, :, :] = res["profile"]
 
-            # sometimes get very small negative values (like -1e-20)
-            R_loop[R_loop < 0] = 0
-            T_loop[T_loop < 0] = 0
-            Alayer_loop[Alayer_loop < 0] = 0
+            # # sometimes get very small negative values (like -1e-20)
+            # R_loop[R_loop < 0] = 0
+            # T_loop[T_loop < 0] = 0
+            # Alayer_loop[Alayer_loop < 0] = 0
 
-            if profile:
-                Aprof_loop[Aprof_loop < 0] = 0
+            # if profile:
+            #     Aprof_loop[Aprof_loop < 0] = 0
 
-            if front_or_rear == "rear":
-                Alayer_loop = np.flip(Alayer_loop, axis=2)
+            # if front_or_rear == "rear":
+            #     Alayer_loop = np.flip(Alayer_loop, axis=2)
 
-                if profile:
-                    Aprof_loop = np.flip(Aprof_loop, axis=2)
+            #     if profile:
+            #         Aprof_loop = np.flip(Aprof_loop, axis=2)
 
-            R.loc[dict(pol=pol)] = R_loop
-            T.loc[dict(pol=pol)] = T_loop
-            Alayer.loc[dict(pol=pol)] = Alayer_loop
+            # R.loc[dict(pol=pol)] = R_loop
+            # T.loc[dict(pol=pol)] = T_loop
+            # Alayer.loc[dict(pol=pol)] = Alayer_loop
 
-            if profile:
-                Aprof.loc[dict(pol=pol)] = Aprof_loop
-                Aprof.transpose("pol", "wl", "angle", "z")
+            # if profile:
+            #     Aprof.loc[dict(pol=pol)] = Aprof_loop
+            #     Aprof.transpose("pol", "wl", "angle", "z")
 
         Alayer = Alayer.transpose("pol", "wl", "angle", "layer")
 
@@ -381,6 +436,12 @@ def TMM(
         phi_sym = options["phi_symmetry"]
         angle_vector_th = angles_in[:, 1]
         angle_vector_phi = angles_in[:, 2]
+
+        binned_theta_in = np.digitize(angle_vector_th, theta_intv, right=True) - 1
+        binned_theta_in[angle_vector_th==0]=0
+        local_angle_mat = np.zeros((angles_in.shape[0],int((len(theta_intv) - 1) / 2)))
+        local_angle_mat[np.arange(angles_in.shape[0]),binned_theta_in] = 1.0
+        local_angle_mat = COO.from_numpy(local_angle_mat)
 
         n_ratio = inc.n(wavelengths)/trns.n(wavelengths)
         sin_thetas = np.sin(angle_vector_th)
@@ -456,29 +517,28 @@ def TMM(
             pass
             # print(fullmat)
 
-        if profile:
-            prof_mat = [make_prof_matrix_wl(wl) for wl in wavelengths]
+        # if profile:
+        #     prof_mat = [make_prof_matrix_wl(wl) for wl in wavelengths]
 
-            profile = xr.concat(prof_mat, "wl")
-            intgr = xr.DataArray(
-                np.sum(A_mat.todense(), 1),
-                dims=["wl", "global_index"],
-                coords={
-                    "wl": wavelengths,
-                    "global_index": np.arange(0, angles_in.shape[0]),
-                },
-            )
-            intgr.name = "intgr"
-            profile.name = "profile"
-            allres = xr.merge([intgr, profile])
+        #     profile = xr.concat(prof_mat, "wl")
+        #     intgr = xr.DataArray(
+        #         np.sum(A_mat.todense(), 1),
+        #         dims=["wl", "global_index"],
+        #         coords={
+        #             "wl": wavelengths,
+        #             "global_index": np.arange(0, angles_in.shape[0]),
+        #         },
+        #     )
+        #     intgr.name = "intgr"
+        #     profile.name = "profile"
+        #     allres = xr.merge([intgr, profile])
 
-            if save:
-                allres.to_netcdf(path_or_mats[2])
+        #     if save:
+        #         allres.to_netcdf(path_or_mats[2])
 
-            return fullmat_backscatter, fullmat_forwardscatter, A_mat, allres
+        #     return fullmat_backscatter, fullmat_forwardscatter, A_mat, allres
 
-        return fullmat_backscatter, fullmat_forwardscatter, A_mat
-
+        return fullmat_backscatter, fullmat_forwardscatter, A_mat, local_angle_mat
 
 class tmm_structure:
     """Set up structure for TMM calculations.
@@ -773,7 +833,6 @@ class tmm_structure:
                 output["R"] = out["R"]
                 output["A"] = 1 - out["R"] - out["T"]
                 output["T"] = out["T"]
-                
             else:
                 out = tmm.inc_tmm(
                     pol,

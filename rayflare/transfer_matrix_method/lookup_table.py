@@ -208,7 +208,7 @@ def make_TMM_lookuptable(
                         if A_per_layer_result.ndim > 1:
                             Alayer_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :] = A_per_layer_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:]
                         if profile:
-                            Aprof_loop[i3, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths), :, :] = profile_coeff_result[offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths),:,:]
+                            Aprof_loop[i3, :, :, order[i4]*len(wavelengths):(order[i4]+1)*len(wavelengths)] = profile_coeff_result[:,:,offset+i3*len(wavelengths):offset+(i3+1)*len(wavelengths)]
 
                 # sometimes get very small negative values (like -1e-20)
                 R_loop[R_loop < 0] = 0

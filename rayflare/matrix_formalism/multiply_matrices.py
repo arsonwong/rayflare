@@ -466,13 +466,19 @@ def matrix_multiplication(
             A_prof = [[] for _ in range(n_bulks)]
             logger.debug(f"Initial intensity: {np.sum(v0, axis=1)}")
 
-            for i1 in range(n_bulks):
+            for i1 in range(max(1,n_bulks)):
 
                 # v0 is actually travelling down, but no reason to start in 'outgoing' ray format.
                 vf_1[i1] = dot_wl(Tf[i1], v0)  # pass through front surface
                 # print(vf_1[i1])
                 # vf_1: incoming to outgoing
                 # print("Transmitted through front", np.sum(vf_1[i1], axis=1))
+
+                if i1==0:
+                    Tfirst = xr.DataArray(
+                        np.array(np.sum(vf_1[i1], axis=1)),
+                        name="Tfirst",
+                    )
 
                 vr[i1].append(dot_wl(Rf[i1], v0))  # reflected from front surface
                 # print("Reflected from front", np.sum(vr[i1][-1], axis=1))
@@ -497,6 +503,9 @@ def matrix_multiplication(
 
                 # rep
                 i2 = 1
+
+                if n_bulks==0:
+                    break
 
                 while np.any(power > options["I_thresh"]):
                     vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming

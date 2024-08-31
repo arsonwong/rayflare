@@ -99,7 +99,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
 
-            if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
+            if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM" or struct.method == "TMM":
                 logger.info(f"Making RT/TMM lookuptable for element {i1} in structure")
                 if i1 == 0:  # top interface
                     incidence = SC.incidence
@@ -231,7 +231,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         options['wavelength'] = light_trapping_wavelength
                         
                     # only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
-                    allArrays_backscatter, allArrays_forwardscatter, absArrays = TMM(
+                    allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat = TMM(
                         struct.layers,
                         incidence,
                         substrate,
@@ -244,13 +244,14 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         front_or_rear=side,
                         save=False,
                         overwrite=overwrite,
+                        lookuptable=SC.TMM_lookup_table[i1],
                         width_differentials = struct.width_differentials, 
                         nk_differentials = struct.nk_parameter_differentials
                     )
                     if side=="front":
-                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays])
+                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat])
                     else:
-                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays])
+                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat])
 
             if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM":
                 logger.info(f"Ray tracing with TMM lookup table for element {i1} in structure")
@@ -272,7 +273,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     )
 
                     # takes 0.374021s with save, 0.18945 without save
-                    allArrays_backscatter, allArrays_forwardscatter, absArrays = RT(
+                    allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat = RT(
                         group,
                         incidence,
                         substrate,
@@ -304,7 +305,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                                 for d in struct.nk_parameter_differentials:
                                     if d is not None:
                                         nk_differentials_num += 1
-                            angle_num = allArrays.shape[2]
+                            angle_num = allArrays_backscatter.shape[2]
                             SC.RAT1st = {'wl':[], 'R':[], 'A':[], 'T':[]}
                             allArrays_backscatter = allArrays_backscatter.todense()
                             allArrays_backscatter_ = np.copy(allArrays_backscatter)
@@ -314,8 +315,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                             absArrays_ = np.copy(absArrays)
                             for i in range(0,width_differentials_num+nk_differentials_num+1):
                                 SC.RAT1st['wl'].append(first_pass_wavelength)
-                                SC.RAT1st['R'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:angle_num,0],axis=1))
-                                SC.RAT1st['T'].append(np.sum(allArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,angle_num:,0],axis=1))
+                                SC.RAT1st['R'].append(np.sum(allArrays_backscatter[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0],axis=1))
+                                SC.RAT1st['T'].append(np.sum(allArrays_forwardscatter[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0],axis=1))
                                 SC.RAT1st['A'].append(absArrays[i*first_pass_wavelength.size:(i+1)*first_pass_wavelength.size,:,0])
                             allArrays_backscatter = allArrays_backscatter[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
                             allArrays_forwardscatter = allArrays_forwardscatter[:light_trapping_wavelength.size*(width_differentials_num+nk_differentials_num+1),:,:]
@@ -328,9 +329,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                             allArrays_backscatter = COO.from_numpy(allArrays_backscatter)
                             allArrays_forwardscatter = COO.from_numpy(allArrays_forwardscatter)
                             absArrays = COO.from_numpy(absArrays)
-                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays])
+                        stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays, local_angle_mat])
                     else:
-                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays])
+                        stored_rear_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter,absArrays, local_angle_mat])
 
             if struct.method == "RT_Fresnel" or struct.method == "RT_analytical_Fresnel":
                 logger.info(f"Ray tracing with Fresnel equations for element {i1} in structure")

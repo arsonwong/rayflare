@@ -378,6 +378,7 @@ def RT(
         allArrays_backscatter = stack([item[0] for item in allres])
         allArrays_forwardscatter = stack([item[1] for item in allres])
         absArrays = stack([item[2] for item in allres])
+        local_angle_mat = stack([item[3] for item in allres])
         if analytical_approx:
             # in angles, wavelengths, out angles --> wavelengths, out angles, in angles
             allArrays_backscatter = np.transpose(allArrays_backscatter, (1, 2, 0))
@@ -389,9 +390,9 @@ def RT(
             # save_npz(path_or_mats[0], allArrays)
             save_npz(path_or_mats[1], absArrays)
 
-        if Fr_or_TMM > 0 and calc_profile is not None:
-            profile = xr.concat([item[3] for item in allres], "wl")
-            intgr = xr.concat([item[4] for item in allres], "wl")
+        if False: #Fr_or_TMM > 0 and calc_profile is not None:
+            profile = xr.concat([item[4] for item in allres], "wl")
+            intgr = xr.concat([item[5] for item in allres], "wl")
             intgr.name = "intgr"
             profile.name = "profile"
 
@@ -406,7 +407,7 @@ def RT(
             return allArrays_backscatter, allArrays_forwardscatter, absArrays, allres
 
         else:
-            return allArrays_backscatter, allArrays_forwardscatter, absArrays
+            return allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat
 
 
 def RT_wl(
@@ -1792,7 +1793,7 @@ class RTSurface:
             self.random_positions = kwargs["random_positions"]
         else:
             self.random_positions = True
-            
+
         if "height_distribution" in kwargs:
         #     return from a probability distribution instead of fixed values. This
         #     will change the height of the pyramids (assume only pyramids for now)

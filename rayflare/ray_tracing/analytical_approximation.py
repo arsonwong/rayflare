@@ -401,8 +401,7 @@ def RT_analytical(
 
             for j in range(num_of_rays):
                 if hit_prob[j,i] > 0:
-                    if iter==0:
-                        thetas_local_incidence.append([hit_prob[j,i],angle_inc[j,i]])
+                    thetas_local_incidence.append([ray_queue[j].probability*hit_prob[j,i],angle_inc[j,i]])
 
                     if Fr_or_TMM == 0:
                         Rs, As_per_layer, Ts = calc_RAT_Fresnel(np.arccos(cos_inc), 's', n0, n1)
@@ -542,6 +541,7 @@ def RT_analytical(
         phi_intv = phi_intv + [np.array([0])]
 
     binned_theta_out = np.digitize(thetas_out, theta_intv, right=True) - 1
+    binned_theta_out[thetas_out==0] = 0
 
     unit_distance = phi_sym/N_azimuths[binned_theta_out]
     phi_ind = phis_out/unit_distance
@@ -549,7 +549,7 @@ def RT_analytical(
 
     binned_theta_in = np.digitize(theta_in, theta_intv, right=True) - 1
     if theta_in==0:
-        binned_theta_in += 1
+        binned_theta_in = 0
     unit_distance = phi_sym/N_azimuths[binned_theta_in]
     phi_ind = phi_in/unit_distance
     bin_in = theta_first_index[binned_theta_in] + phi_ind.astype(int)
@@ -625,13 +625,14 @@ def RT_analytical(
     if Fr_or_TMM > 0:
         binned_local_angles = np.digitize(thetas_local_incidence[:,1], theta_intv, right=True) - 1
         local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
-        local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
+        # local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
+        np.add.at(local_angle_mat, binned_local_angles, thetas_local_incidence[:,0])
         local_angle_mat = COO.from_numpy(local_angle_mat)
 
         return out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat, bin_in
 
     else:
-        return out_mat_backscatter, out_mat_forwardscatter, out_mat, A_mat, bin_in
+        return out_mat_backscatter, out_mat_forwardscatter, A_mat, bin_in
 
 
 
