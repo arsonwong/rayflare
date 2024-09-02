@@ -301,8 +301,9 @@ def RT(
                     R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
                     A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
 
+            n_angles = options["lookuptable_angles"]
             if only_incidence_angle: 
-                theta_in = options["theta_in"]
+                theta_in = options["theta_in"]               
                 # if options["theta_in"]==0:
                 #     theta_in = 0.0001
                 phi_in = options["phi_in"]
@@ -327,6 +328,7 @@ def RT(
                     radian_table,
                     R_T_table,
                     A_table,
+                    n_angles,
                     side)
                 bin_in = res[-1]
                 A_mat = np.zeros((len(stacked_wavelengths), n_absorbing_layers))
@@ -338,8 +340,8 @@ def RT(
                 out_mat_backscatter = COO.from_numpy(out_mat_backscatter)  # sparse matrix
                 out_mat_forwardscatter = COO.from_numpy(out_mat_forwardscatter)  # sparse matrix
                 A_mat = COO.from_numpy(A_mat)
-                local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
-                local_angle_mat = COO.from_numpy(local_angle_mat)
+                local_angle_mat = np.zeros((int(n_angles)))
+                # local_angle_mat = COO.from_numpy(local_angle_mat)
                 allres = []
                 for i1 in range(angles_in.shape[0]):
                     if i1 == bin_in:
@@ -370,6 +372,7 @@ def RT(
                         radian_table,
                         R_T_table,
                         A_table,
+                        n_angles,
                         side,
                     )
                     for i1 in range(angles_in.shape[0])
@@ -378,7 +381,7 @@ def RT(
         allArrays_backscatter = stack([item[0] for item in allres])
         allArrays_forwardscatter = stack([item[1] for item in allres])
         absArrays = stack([item[2] for item in allres])
-        local_angle_mat = stack([item[3] for item in allres])
+        local_angle_mat = np.array([item[3] for item in allres])
         if analytical_approx:
             # in angles, wavelengths, out angles --> wavelengths, out angles, in angles
             allArrays_backscatter = np.transpose(allArrays_backscatter, (1, 2, 0))

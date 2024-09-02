@@ -11,6 +11,8 @@ from rayflare.angles import make_angle_vector, fold_phi, overall_bin
 import os
 import xarray as xr
 from solcore.state import State
+import time
+import matplotlib.pyplot as plt
 
 from rayflare.structure import Interface, BulkLayer
 from rayflare.utilities import get_savepath, get_wavelength
@@ -75,7 +77,7 @@ def calculate_RAT(SC, options, save_location="default"):
         options["light_trapping_wavelength"] = options["wavelength"]
 
     results = matrix_multiplication(
-        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices, SC.roughnessIndices
+        bulk_mats, bulk_widths, options, layer_names, calc_prof_list, save_location, SC.stored_redistribution_matrices, SC.bulkIndices, SC.interfaceIndices, SC.roughnessIndices, SC.TMM_lookup_table, SC
     )
 
     return results
@@ -219,12 +221,18 @@ def load_redistribution_matrices(
     Is = []
 
     side_code = {0: 'front', 1: 'rear'}
+    local_angle_mats = []
     for i1 in range(n_interfaces):
+
         Rs.append([])
         Ts.append([])
         As.append([])
         Ps.append([])
         Is.append([])
+        local_angle_mats.append([[],[]])
+        local_angle_mats[i1][0] = stored_redistribution_matrices[0][interfaceIndices[i1]][3]
+        if not (i1 == n_interfaces-1 and front_or_rear==1):
+            local_angle_mats[i1][1] = stored_redistribution_matrices[1][interfaceIndices[i1]][3]
 
         for front_or_rear in range(2):
             if i1 == n_interfaces-1 and front_or_rear==1:
@@ -274,7 +282,7 @@ def load_redistribution_matrices(
                     As[i1][front_or_rear].append(absmat[i2])
 
 
-            if calc_prof_list[i1] is not None:
+            if False: #calc_prof_list[i1] is not None:
                 profmat_path = os.path.join(
                     results_path, layer_names[i1] + front_or_rear + "profmat.nc"
                 )
@@ -313,17 +321,17 @@ def load_redistribution_matrices(
                 Rf.append(Rs[i3][0][index])
                 Tf.append(Ts[i3][0][index])
                 Af.append(As[i3][0][index])
-                Pf.append(Rs[i3][0][0])
-                If.append(Rs[i3][0][0])
+                Pf.append(Ps[i3][0][index])
+                If.append(Is[i3][0][index])
                 if i3 < n_interfaces-1:
                     Rb.append(Rs[i3][1][index])
                     Tb.append(Ts[i3][1][index])
                     Ab.append(As[i3][1][index])
-                    Pb.append(Rs[i3][1][0])
-                    Ib.append(Rs[i3][1][0])
+                    Pb.append(Ps[i3][1][index])
+                    Ib.append(Is[i3][1][index])
             outputs.append({'Rf':Rf, 'Tf':Tf, 'Af':Af, 'Pf':Pf, 'If':If, 'Rb':Rb, 'Tb':Tb, 'Ab':Ab, 'Pb':Pb, 'Ib':Ib})
 
-    return outputs
+    return outputs, local_angle_mats
 
 
 def append_per_pass_info(i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab):
@@ -342,7 +350,7 @@ def append_per_pass_info(i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab):
 
 
 def matrix_multiplication(
-    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None, bulkIndices=None, interfaceIndices=None, roughnessIndices=None
+    bulk_mats, bulk_thick, options, layer_names, calc_prof_list, save_location, stored_redistribution_matrices=None, bulkIndices=None, interfaceIndices=None, roughnessIndices=None, TMM_lookup_table=None, SC=None
 ):
     """
 
@@ -430,7 +438,7 @@ def matrix_multiplication(
             rear_roughness.append(None)
 
     # load redistribution matrices
-    outputs = load_redistribution_matrices(
+    outputs, local_angle_mats = load_redistribution_matrices(
         results_path, n_a_in, n_interfaces, layer_names, num_wl, calc_prof_list, stored_redistribution_matrices, interfaceIndices
     )
 
@@ -459,7 +467,7 @@ def matrix_multiplication(
         vf_2 = [[] for _ in range(n_interfaces)]
         vb_2 = [[] for _ in range(n_interfaces)]
 
-        if np.any(len_calcs > 0) or options.bulk_profile:
+        if False: #np.any(len_calcs > 0) or options.bulk_profile:
             # need to calculate profiles in either the bulk or the interfaces
 
             a_prof = [[] for _ in range(n_interfaces)]
@@ -609,7 +617,6 @@ def matrix_multiplication(
             for i1 in range(max(1,n_bulks)):
 
                 vf_1[i1] = dot_wl(Tf[i1], v0)  # pass through front surface
-
                 if i1==0:
                     Tfirst = xr.DataArray(
                         np.array(np.sum(vf_1[i1], axis=1)),
@@ -657,6 +664,82 @@ def matrix_multiplication(
         vt = [np.array(item) for item in vt]
         a = [np.array(item) for item in a]
         A = [np.array(item) for item in A]
+        print(len(vr))
+        print(vr[0].shape)
+        print(v0.shape)
+        print(vf_1[i1].shape)
+        print(local_angle_mats[0][0].shape)
+        print(local_angle_mats[0][1].shape)
+        print(local_angle_mats[1][0].shape)
+
+        B = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
+        # Alayer = Alayer.transpose("side", "pol", "wl", "angle", "layer")
+        # then later "angle, "pol", "wl", "layer"
+        print(TMM_lookup_table[0]['Alayer'].shape)
+        # Aprof = Aprof.transpose("pol", "layer", "side", "wl", "angle", "coeff")
+        print(TMM_lookup_table[0]['Aprof'].shape)
+        print(a[0].shape) # 2(interface), 100(wl), 1(layers)
+
+        Aprof = TMM_lookup_table[0]['Aprof']
+        if options["pol"] == "u":
+            Aprof = 0.5*(Aprof.loc[dict(pol='s')]+Aprof.loc[dict(pol='p')]).values
+        else:
+            Aprof = Aprof.loc[dict(pol=options["pol"])].values
+
+        Aprof_ = Aprof[0][0]
+
+        print(Aprof_.shape)
+        print(B.shape)
+
+        depth_spacing = options["depth_spacing"]*1e9
+
+        layer_widths = []
+
+        for i1, struct in enumerate(SC):
+            if isinstance(struct, BulkLayer):
+                layer_widths.append(struct.width * 1e9)  # convert m to nm
+            elif isinstance(struct, Interface):
+                layer_widths.append(
+                    (np.array(struct.widths) * 1e9).tolist()
+                )  # convert m to nm
+            else:
+                layer_widths.append(None)
+
+        print(layer_widths)
+        
+        z = np.arange(0, layer_widths[0][0], depth_spacing)
+
+        # part1 = x[:, 0] * np.exp(x[:, 4] * z[layer_index])
+        # part2 = x[:, 1] * np.exp(-x[:, 4] * z[layer_index])
+        # part3 = (x[:, 2] + 1j * x[:, 3]) * np.exp(1j * x[:, 5] * z[layer_index])
+        # part4 = (x[:, 2] - 1j * x[:, 3]) * np.exp(-1j * x[:, 5] * z[layer_index])
+        # result = np.real(part1 + part2 + part3 + part4)
+        # if side == -1:
+        #     result = np.flip(result, 1)
+        # return result.reduce(np.sum, axis=0).assign_coords(
+        #     dim_0=z[layer_index] + offset[layer_index]
+        # )
+    
+        part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
+        part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
+        part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
+        part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
+        result = np.real(part1 + part2 + part3 + part4)
+        print(z.shape)
+        print(Aprof_.shape)
+        print(result.shape)
+        t1 = time.time()
+        result = B[:,:,None]*result
+        print(time.time()-t1)
+        print(result.shape)
+        result = np.sum(result,axis=1)
+        print(result.shape)
+
+        plt.plot(z,result[0])
+        plt.show()
+
+        assert(1==0)
+
 
         sum_dims = ["bulk_index", "wl"]
         sum_coords = {"bulk_index": np.arange(0, max(1,n_bulks)), "wl": options["light_trapping_wavelength"]}
@@ -722,7 +805,7 @@ def matrix_multiplication(
                         )  # not necessarily same number of z coords per layer stack
 
                 bulk_profile = [np.sum(prof_el, 0) for prof_el in A_prof]
-                RAT = xr.merge([R, A_bulk, A_interface, T])
+                RAT = xr.merge([R, A_bulk, A_interface, T, Tfirst])
 
                 grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'profile':profile, 'bulk_profile':bulk_profile})
 

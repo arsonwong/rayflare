@@ -437,11 +437,13 @@ def TMM(
         angle_vector_th = angles_in[:, 1]
         angle_vector_phi = angles_in[:, 2]
 
-        binned_theta_in = np.digitize(angle_vector_th, theta_intv, right=True) - 1
+        n_angles = options["lookuptable_angles"]
+        lookup_table_thetas = np.linspace(0, (np.pi / 2) - 1e-3, n_angles)
+        binned_theta_in = np.digitize(angle_vector_th, lookup_table_thetas, right=True) - 1
         binned_theta_in[angle_vector_th==0]=0
-        local_angle_mat = np.zeros((angles_in.shape[0],int((len(theta_intv) - 1) / 2)))
+        local_angle_mat = np.zeros((angles_in.shape[0],int(n_angles)))
         local_angle_mat[np.arange(angles_in.shape[0]),binned_theta_in] = 1.0
-        local_angle_mat = COO.from_numpy(local_angle_mat)
+        # local_angle_mat = COO.from_numpy(local_angle_mat)
 
         n_ratio = inc.n(wavelengths)/trns.n(wavelengths)
         sin_thetas = np.sin(angle_vector_th)

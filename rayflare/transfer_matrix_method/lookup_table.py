@@ -228,11 +228,11 @@ def make_TMM_lookuptable(
 
                 if profile:
                     Aprof.loc[dict(side=side, pol=pol)] = Aprof_loop
-                    Aprof.transpose("side", "pol", "wl", "angle", "layer", "coeff")
 
         Alayer = Alayer.transpose("side", "pol", "wl", "angle", "layer")
 
         if profile:
+            Aprof = Aprof.transpose("pol", "layer", "side", "wl", "angle", "coeff")
             allres = xr.merge([R, T, Alayer, Aprof])
         else:
             allres = xr.merge([R, T, Alayer])

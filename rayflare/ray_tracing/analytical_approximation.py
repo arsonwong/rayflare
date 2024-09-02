@@ -297,6 +297,7 @@ def RT_analytical(
     radian_table,
     R_T_table,
     A_table,
+    lookup_table_n_angles,
     side
 ):
 
@@ -623,11 +624,11 @@ def RT_analytical(
     A_mat = COO.from_numpy(A_mat)
 
     if Fr_or_TMM > 0:
-        binned_local_angles = np.digitize(thetas_local_incidence[:,1], theta_intv, right=True) - 1
-        local_angle_mat = np.zeros((int((len(theta_intv) - 1) / 2)))
-        # local_angle_mat[binned_local_angles] = thetas_local_incidence[:,0]
+        lookup_table_thetas = np.linspace(0, (np.pi / 2) - 1e-3, lookup_table_n_angles)
+        binned_local_angles = np.digitize(thetas_local_incidence[:,1], lookup_table_thetas, right=True) - 1
+        local_angle_mat = np.zeros((int(lookup_table_n_angles)))
         np.add.at(local_angle_mat, binned_local_angles, thetas_local_incidence[:,0])
-        local_angle_mat = COO.from_numpy(local_angle_mat)
+        # local_angle_mat = COO.from_numpy(local_angle_mat)
 
         return out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat, bin_in
 
