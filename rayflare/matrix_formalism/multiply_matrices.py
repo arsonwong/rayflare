@@ -638,25 +638,30 @@ def matrix_multiplication(
                     break
 
                 while np.any(power > options["I_thresh"]):
-                    vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
+                    if i2==1:
+                        vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
                     if front_roughness[i1] is not None:
                         vf_1[i1] = dot_wl(front_roughness[i1], vf_1[i1]) # roughness scatter
                     vb_1[i1] = dot_wl(D[i1], vf_1[i1])  # pass through bulk, downwards
                     A[i1].append(np.sum(vf_1[i1], 1) - np.sum(vb_1[i1], 1))
 
                     vb_2[i1] = dot_wl(Rf[i1 + 1], vb_1[i1])  # reflect from back surface
+
                     if rear_roughness[i1] is not None:
                         vb_2[i1] = dot_wl(rear_roughness[i1], vb_2[i1]) # roughness scatter
                     vf_2[i1] = dot_wl(D[i1], vb_2[i1])  # pass through bulk, upwards
-                    vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
+
+                    # vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
                     vf_1[i1] = dot_wl(Rb[i1], vf_2[i1])  # reflect from front surface
+
                     A[i1].append(np.sum(vb_2[i1], 1) - np.sum(vf_2[i1], 1))
                     power = np.sum(vf_1[i1], axis=1)
-                    # logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+                    logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
 
                     vr, vt, a = append_per_pass_info(
                         i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab
                     )
+                    vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
 
                     i2 += 1
 
@@ -664,15 +669,9 @@ def matrix_multiplication(
         vt = [np.array(item) for item in vt]
         a = [np.array(item) for item in a]
         A = [np.array(item) for item in A]
-        print(len(vr))
-        print(vr[0].shape)
-        print(v0.shape)
-        print(vf_1[i1].shape)
-        print(local_angle_mats[0][0].shape)
-        print(local_angle_mats[0][1].shape)
-        print(local_angle_mats[1][0].shape)
 
         B = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
+        
         # Alayer = Alayer.transpose("side", "pol", "wl", "angle", "layer")
         # then later "angle, "pol", "wl", "layer"
         print(TMM_lookup_table[0]['Alayer'].shape)
@@ -719,12 +718,14 @@ def matrix_multiplication(
         # return result.reduce(np.sum, axis=0).assign_coords(
         #     dim_0=z[layer_index] + offset[layer_index]
         # )
-    
+        # print(Aprof_[20,0,4])
+        # print(options.wavelength[20])
+        # assert(1==0)
         part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
         part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
         part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
         part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
-        result = np.real(part1 + part2 + part3 + part4)
+        result = np.real(part2) # + part2) # + part3 + part4)
         print(z.shape)
         print(Aprof_.shape)
         print(result.shape)
@@ -733,12 +734,55 @@ def matrix_multiplication(
         print(time.time()-t1)
         print(result.shape)
         result = np.sum(result,axis=1)
-        print(result.shape)
+        print(result.shape) # wl then z
 
-        plt.plot(z,result[0])
-        plt.show()
+        # need to do the one from the back
+        Aprof_ = Aprof[0][1] # backside 
+        print(vf_2[0].shape)
+        print(local_angle_mats[0][1].shape)
+        print(v0.shape)
+        print(v0[20])
+        print(vf_2[0][20])
+        B = np.einsum('ij,jk->ik',vf_2[0],local_angle_mats[0][1])
+        # print(Aprof_[20,0,4])
+        # print(options.wavelength[20])
+        # assert(1==0)
+        part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
+        part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
+        part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
+        part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
+        result2 = np.real(part2) # + part2) # + part3 + part4)
+        print(z.shape)
+        print(Aprof_.shape)
+        print(result2.shape)
+        t1 = time.time()
+        result2 = B[:,:,None]*result2
+        print(time.time()-t1)
+        print(result2.shape)
+        result2 = np.sum(result2,axis=1)
+        print(result2.shape) # wl then z
 
-        assert(1==0)
+        # not sure if result2 need flipping or something
+        # plt.plot(z,result[20])
+        # plt.show()
+        # plt.plot(z,result2[20])
+        # plt.show()
+        # print(options.wavelength[20])
+        # assert(1==0)
+
+        # result += result2
+
+        # # then now need to normalize
+        # # print(a[0].shape) # 2(interface), 100(wl), 1(layers)   
+        # total_ = a[0][0,:,0] # wl
+        # total2_ = np.sum(result,axis=1)
+        # ratio_ = total_/total2_
+        # result = result*ratio_[:,None]     
+
+        # plt.plot(z,result[0])
+        # plt.show()
+
+        # assert(1==0)
 
 
         sum_dims = ["bulk_index", "wl"]
@@ -767,7 +811,7 @@ def matrix_multiplication(
                 name="T",
             )
 
-            if np.any(len_calcs > 0) or options.bulk_profile:
+            if False: #np.any(len_calcs > 0) or options.bulk_profile:
 
                 A_prof = [np.array(item) for item in A_prof]
 

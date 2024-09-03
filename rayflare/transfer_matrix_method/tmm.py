@@ -463,12 +463,14 @@ def TMM(
         bin_out_t = -1*np.ones_like(thetas_out_t)
         if non_nan_indices[0].size > 0:
             binned_theta_out_t = np.digitize(thetas_out_t[non_nan_indices], theta_intv, right=True) - 1
+            binned_theta_out_t[thetas_out_t[non_nan_indices]==0]=0
             unit_distance = phi_sym/N_azimuths[binned_theta_out_t]
             phi_ind = phis_out_t[non_nan_indices]/unit_distance
             bin_out_t[non_nan_indices] = theta_first_index[binned_theta_out_t] + phi_ind.astype(int)
         bin_out_t = bin_out_t.astype(int)
 
         binned_theta_out_r = np.digitize(thetas_out_r, theta_intv, right=True) - 1
+        binned_theta_out_r[thetas_out_r==0]=0
         unit_distance = phi_sym/N_azimuths[binned_theta_out_r]
         phi_ind = phis_out_r/unit_distance
         bin_out_r = theta_first_index[binned_theta_out_r] + phi_ind.astype(int)

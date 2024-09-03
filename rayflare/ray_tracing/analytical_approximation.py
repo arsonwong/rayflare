@@ -58,7 +58,8 @@ def make_arbitrary_perpendicular_direction(direction):
 # given its parent ray, its own direction, the plane that its parent scattered off of, 
 # and the resultant Rs, Rp or Ts, Tp
 class Ray:
-    def __init__(self, direction, probability=1.0, parent=None, angle_inc=None, scatter_plane_normal=None, R_or_T_s=None, R_or_T_p=None, A_entry=None):
+    def __init__(self, direction, probability=1.0, parent=None, angle_inc=None, 
+                 scatter_plane_normal=None, R_or_T_s=None, R_or_T_p=None, A_entry=None, theta_local_incidence=None):
         self.direction = direction
         self.normalized_probability = probability 
         self.angle_inc = angle_inc
@@ -72,6 +73,7 @@ class Ray:
         self.R_or_T_s = R_or_T_s
         self.R_or_T_p = R_or_T_p
         self.A_entry = A_entry
+        self.theta_local_incidence = theta_local_incidence
         self.probability = self.normalized_probability
         if parent is None: # first initial ray, then just make circular polarized
             self.propagated = True
@@ -326,7 +328,6 @@ def RT_analytical(
 
     # do the analytical ray tracing here
     scattered_rays = []
-    thetas_local_incidence = []
     A_mat = np.zeros((len(wl), n_abs_layers))
 
     for iter in range(max_interactions):
@@ -402,7 +403,6 @@ def RT_analytical(
 
             for j in range(num_of_rays):
                 if hit_prob[j,i] > 0:
-                    thetas_local_incidence.append([ray_queue[j].probability*hit_prob[j,i],angle_inc[j,i]])
 
                     if Fr_or_TMM == 0:
                         Rs, As_per_layer, Ts = calc_RAT_Fresnel(np.arccos(cos_inc), 's', n0, n1)
@@ -425,7 +425,8 @@ def RT_analytical(
                         Tp = R_T_entry[3]
 
                     reflected_ray = Ray(direction = reflected_directions[j], probability = hit_prob[j][i], parent=ray_queue[j], 
-                                        angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Rp, R_or_T_s=Rs, A_entry=A_entry)
+                                        angle_inc=angle_inc[j,i], scatter_plane_normal=normals[i], R_or_T_p=Rp, R_or_T_s=Rs, A_entry=A_entry, 
+                                        theta_local_incidence=abs(angle_inc[j,i]))
                     # s_component, p_component = reflected_ray.propagate_R_or_T()
                     
                     # if s_component.shape[0]==1:
@@ -450,6 +451,7 @@ def RT_analytical(
         ray_queue = ray_queue[num_of_rays:]
         scattered_faces = scattered_faces[num_of_rays:]
 
+    thetas_local_incidence = []
     ray_queue = [first_ray]
     for iter in range(max_interactions):
         num_of_rays = len(ray_queue)
@@ -512,6 +514,8 @@ def RT_analytical(
 
             for j in range(num_of_rays):
                 ray_queue[j].polarization = Polarization(s_vector[j], p_vector[j])
+                if ray_queue[j].theta_local_incidence is not None:
+                    thetas_local_incidence.append([ray_queue[j].probability/ray_queue[j].parent.probability*np.mean(ray_queue[j].parent.getIntensity()),ray_queue[j].theta_local_incidence])
                 if ray_queue[j].A_entry is not None:
                     absorption = s_component[j][:,None]**2*ray_queue[j].A_entry[0]+p_component[j][:,None]**2*ray_queue[j].A_entry[1]
                     A_mat += ray_queue[j].probability*absorption
@@ -521,7 +525,7 @@ def RT_analytical(
 
         ray_queue = ray_queue[num_of_rays:]
 
-    thetas_local_incidence = np.abs(np.array(thetas_local_incidence))
+    thetas_local_incidence = np.array(thetas_local_incidence)
 
     # now, compile the results
     scattered_ray_directions = get_ray_directions(scattered_rays)
@@ -624,8 +628,10 @@ def RT_analytical(
     A_mat = COO.from_numpy(A_mat)
 
     if Fr_or_TMM > 0:
+        thetas_local_incidence[:,0] = thetas_local_incidence[:,0]/np.sum(thetas_local_incidence[:,0])
         lookup_table_thetas = np.linspace(0, (np.pi / 2) - 1e-3, lookup_table_n_angles)
         binned_local_angles = np.digitize(thetas_local_incidence[:,1], lookup_table_thetas, right=True) - 1
+        binned_local_angles[thetas_local_incidence[:,1]==0] = 0
         local_angle_mat = np.zeros((int(lookup_table_n_angles)))
         np.add.at(local_angle_mat, binned_local_angles, thetas_local_incidence[:,0])
         # local_angle_mat = COO.from_numpy(local_angle_mat)

@@ -84,8 +84,8 @@ def sel_mat(name):
     return materials[dict[name]]
 
 options.detailed = True
-front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
-back_materials = [Layer(101e-9, sel_mat("Si_"))]
+front_materials = [Layer(1e-9, sel_mat("glass_"))]
+back_materials = [Layer(1e-9, sel_mat("glass_"))]
 options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
 options["theta_in"] = 0*np.pi/180
@@ -94,15 +94,15 @@ options["phi_in"] = 0*np.pi/180
 surf_pyr_upright = regular_pyramids(upright=True, elevation_angle=50)
 surf_planar = planar_surface()
 front_surf_pyr = Interface(
-    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True, prof_layers=[1]
+    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True, # prof_layers=[1]
 )
 front_surf_planar = Interface(
     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True, prof_layers=[1]
 )
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
-bulk_Si = BulkLayer(1800e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
-SC = Structure([front_surf_pyr, bulk_Si, back_surf_planar], incidence=Air, transmission=sel_mat("Si_"))
+bulk_Si = BulkLayer(1e-6, sel_mat("glass_"), name="Si_bulk")  # bulk thickness in m, make very thick
+SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=Air, transmission=Air) #sel_mat("Si_"))
 
 process_structure(SC, options, overwrite=True)
 results_RT = calculate_RAT(SC, options)
@@ -110,6 +110,7 @@ results_RT = calculate_RAT(SC, options)
 RAT = results_RT[0]['RAT']
 wl = RAT['wl']*1e9
 R = np.array(RAT['R'][0])
+T = np.array(RAT['T'][0])
 Tfirst = np.array(RAT['Tfirst'])
 A = 1 - R - Tfirst
 data = np.loadtxt(os.path.join(current_dir, r"PVL_benchmark", r"teststruct16_results.csv"), skiprows=0, delimiter=',')
@@ -126,6 +127,8 @@ plt.ylabel('RAT')
 plt.ylim(0, 1)
 plt.legend(loc=0)
 plt.show()
+print(R)
+print(T)
 assert(1==0)
 
 # front_materials = [Layer(200e-9, sel_mat("heavy_ITO_"))]
