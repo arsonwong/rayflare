@@ -95,7 +95,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             layer_widths.append(None)
 
     SC.TMM_lookup_table = []
-    for i1, struct in enumerate(SC):
+    for i1, struct in enumerate(SC):        
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
 
@@ -140,7 +140,69 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     width_differentials = struct.width_differentials,
                     nk_differentials = struct.nk_parameter_differentials
                 ))
+        elif isinstance(struct, list):
+            R_ = None
+            T_ = None
+            Alayer_ = None
+            Aprof_ = None
+            for item in struct:
+                if item[1].method == "RT_TMM" or item[1].method == "RT_analytical_TMM" or item[1].method == "TMM":
+                    if i1 == 0:  # top interface
+                        incidence = SC.incidence
+                    else:  # not top interface
+                        if isinstance(SC[i1 - 1], Roughness):
+                            incidence = SC[i1 - 2].material  # bulk material above
+                        else:
+                            incidence = SC[i1 - 1].material
 
+                    if i1 == (len(SC) - 1):  # bottom interface
+                        substrate = SC.transmission
+                    else:  # not bottom interface
+                        if isinstance(SC[i1 + 1], Roughness):
+                            substrate = SC[i1 + 2].material  # bulk material below
+                        else:
+                            substrate = SC[i1 + 1].material  # bulk material below
+
+                    coherent, coherency_list = determine_coherency(item[1])
+
+                    prof_layers = item[1].prof_layers
+
+                    # takes 0.098619s
+                    # takes 0.04754 without including unpol and not saving results
+                    lookup_table = make_TMM_lookuptable(
+                        item[1].layers,
+                        incidence,
+                        substrate,
+                        item[1].name,
+                        options,
+                        structpath,
+                        coherent,
+                        coherency_list,
+                        prof_layers,
+                        [1, -1],
+                        overwrite,
+                        include_unpol=False,
+                        save = False,
+                        width_differentials = item[1].width_differentials,
+                        nk_differentials = item[1].nk_parameter_differentials
+                    )
+
+                    if R_ is None:
+                        R_ = item[0]*lookup_table['R']
+                        T_ = item[0]*lookup_table['T']
+                        Alayer_ = item[0]*lookup_table['Alayer']
+                        Aprof_ = item[0]*lookup_table['Aprof']
+                    else:
+                        R_ += item[0]*lookup_table['R']
+                        T_ += item[0]*lookup_table['T']
+                        Alayer_ += item[0]*lookup_table['Alayer']
+                        Aprof_ += item[0]*lookup_table['Aprof']
+            lookup_table['R'] = R_
+            lookup_table['T'] = T_
+            lookup_table['Alayer'] = Alayer_
+            lookup_table['Aprof'] = Aprof_
+            SC.TMM_lookup_table.append(lookup_table)
+            SC[i1] = SC[i1][0][1]
         if len(SC.TMM_lookup_table) < i1+1:
             SC.TMM_lookup_table.append(None)
 

@@ -48,7 +48,7 @@ options.periodic = True
 options.theta_in = 0
 options.n_jobs = -3
 options.depth_spacing_bulk = 1e-7
-options.detailed = False
+options.detailed = True
 
 # Get the current directory
 current_dir = os.getcwd()
@@ -84,7 +84,7 @@ def sel_mat(name):
     return materials[dict[name]]
 
 options.detailed = True
-front_materials = [Layer(1e-9, sel_mat("glass_"))]
+front_materials = [Layer(100e-9, sel_mat("SiNx_"))]
 back_materials = [Layer(1e-9, sel_mat("glass_"))]
 options["n_theta_bins"] = 50
 options["only_incidence_angle"] = True
@@ -94,7 +94,7 @@ options["phi_in"] = 0*np.pi/180
 surf_pyr_upright = regular_pyramids(upright=True, elevation_angle=50)
 surf_planar = planar_surface()
 front_surf_pyr = Interface(
-    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True, # prof_layers=[1]
+    "RT_analytical_TMM", layers=front_materials, texture=surf_pyr_upright, name="SiN_RT", coherent=True, prof_layers=[1]
 )
 front_surf_planar = Interface(
     "TMM", layers=front_materials, texture=surf_planar, name="SiN_RT", coherent=True, prof_layers=[1]
@@ -102,7 +102,9 @@ front_surf_planar = Interface(
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
 bulk_Si = BulkLayer(1e-6, sel_mat("glass_"), name="Si_bulk")  # bulk thickness in m, make very thick
-SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=Air, transmission=Air) #sel_mat("Si_"))
+# SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=Air, transmission=Air) #sel_mat("Si_"))
+# plan to do 
+SC = Structure([[(0.4,front_surf_planar),(0.6,front_surf_planar)], bulk_Si, back_surf_planar], incidence=Air, transmission=Air) #sel_mat("Si_"))
 
 process_structure(SC, options, overwrite=True)
 results_RT = calculate_RAT(SC, options)

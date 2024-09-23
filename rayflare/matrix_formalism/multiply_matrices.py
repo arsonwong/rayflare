@@ -337,14 +337,14 @@ def load_redistribution_matrices(
 def append_per_pass_info(i1, vr, vt, a, vf_2, vb_1, Tb, Tf, Af, Ab):
 
     vr[i1].append(
-        dot_wl(Tb[i1], vf_2[i1])
+        dot_wl(Tb[i1], vf_2[i1][-1])
     )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
     vt[i1].append(
-        dot_wl(Tf[i1 + 1], vb_1[i1])
+        dot_wl(Tf[i1 + 1], vb_1[i1][-1])
     )  # transmitted into medium below through back surface
 
-    a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1]))  # absorbed in 2nd surface
-    a[i1].append(dot_wl(Ab[i1], vf_2[i1]))  # absorbed in 1st surface (from the back)
+    a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
+    a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
 
     return vr, vt, a
 
@@ -642,19 +642,19 @@ def matrix_multiplication(
                         vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
                     if front_roughness[i1] is not None:
                         vf_1[i1] = dot_wl(front_roughness[i1], vf_1[i1]) # roughness scatter
-                    vb_1[i1] = dot_wl(D[i1], vf_1[i1])  # pass through bulk, downwards
-                    A[i1].append(np.sum(vf_1[i1], 1) - np.sum(vb_1[i1], 1))
+                    vb_1[i1].append(dot_wl(D[i1], vf_1[i1]))  # pass through bulk, downwards
+                    A[i1].append(np.sum(vf_1[i1], 1) - np.sum(vb_1[i1][-1], 1))
 
-                    vb_2[i1] = dot_wl(Rf[i1 + 1], vb_1[i1])  # reflect from back surface
+                    vb_2[i1] = dot_wl(Rf[i1 + 1], vb_1[i1][-1])  # reflect from back surface
 
                     if rear_roughness[i1] is not None:
                         vb_2[i1] = dot_wl(rear_roughness[i1], vb_2[i1]) # roughness scatter
-                    vf_2[i1] = dot_wl(D[i1], vb_2[i1])  # pass through bulk, upwards
+                    vf_2[i1].append(dot_wl(D[i1], vb_2[i1]))  # pass through bulk, upwards
 
                     # vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
-                    vf_1[i1] = dot_wl(Rb[i1], vf_2[i1])  # reflect from front surface
+                    vf_1[i1] = dot_wl(Rb[i1], vf_2[i1][-1])  # reflect from front surface
 
-                    A[i1].append(np.sum(vb_2[i1], 1) - np.sum(vf_2[i1], 1))
+                    A[i1].append(np.sum(vb_2[i1], 1) - np.sum(vf_2[i1][-1], 1))
                     power = np.sum(vf_1[i1], axis=1)
                     logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
 
@@ -667,17 +667,12 @@ def matrix_multiplication(
 
         vr = [np.array(item) for item in vr]
         vt = [np.array(item) for item in vt]
+        vf_2 = [np.array(item) for item in vf_2]
+        vb_1 = [np.array(item) for item in vb_1]
         a = [np.array(item) for item in a]
         A = [np.array(item) for item in A]
 
-        B = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
-        
-        # Alayer = Alayer.transpose("side", "pol", "wl", "angle", "layer")
-        # then later "angle, "pol", "wl", "layer"
-        print(TMM_lookup_table[0]['Alayer'].shape)
-        # Aprof = Aprof.transpose("pol", "layer", "side", "wl", "angle", "coeff")
-        print(TMM_lookup_table[0]['Aprof'].shape)
-        print(a[0].shape) # 2(interface), 100(wl), 1(layers)
+        front_local_angles = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
 
         Aprof = TMM_lookup_table[0]['Aprof']
         if options["pol"] == "u":
@@ -685,89 +680,55 @@ def matrix_multiplication(
         else:
             Aprof = Aprof.loc[dict(pol=options["pol"])].values
 
-        Aprof_ = Aprof[0][0]
+        # Aprof_ = Aprof[0][0] #layer1,side1
 
-        print(Aprof_.shape)
-        print(B.shape)
+        # depth_spacing = options["depth_spacing"]*1e9
 
-        depth_spacing = options["depth_spacing"]*1e9
+        # layer_widths = []
 
-        layer_widths = []
-
-        for i1, struct in enumerate(SC):
-            if isinstance(struct, BulkLayer):
-                layer_widths.append(struct.width * 1e9)  # convert m to nm
-            elif isinstance(struct, Interface):
-                layer_widths.append(
-                    (np.array(struct.widths) * 1e9).tolist()
-                )  # convert m to nm
-            else:
-                layer_widths.append(None)
-
-        print(layer_widths)
+        # for i1, struct in enumerate(SC):
+        #     if isinstance(struct, BulkLayer):
+        #         layer_widths.append(struct.width * 1e9)  # convert m to nm
+        #     elif isinstance(struct, Interface):
+        #         layer_widths.append(
+        #             (np.array(struct.widths) * 1e9).tolist()
+        #         )  # convert m to nm
+        #     else:
+        #         layer_widths.append(None)
         
-        z = np.arange(0, layer_widths[0][0], depth_spacing)
+        # z = np.arange(0, layer_widths[0][0], depth_spacing)
 
-        # part1 = x[:, 0] * np.exp(x[:, 4] * z[layer_index])
-        # part2 = x[:, 1] * np.exp(-x[:, 4] * z[layer_index])
-        # part3 = (x[:, 2] + 1j * x[:, 3]) * np.exp(1j * x[:, 5] * z[layer_index])
-        # part4 = (x[:, 2] - 1j * x[:, 3]) * np.exp(-1j * x[:, 5] * z[layer_index])
+        # part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
+        # part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
+        # part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
+        # part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
         # result = np.real(part1 + part2 + part3 + part4)
-        # if side == -1:
-        #     result = np.flip(result, 1)
-        # return result.reduce(np.sum, axis=0).assign_coords(
-        #     dim_0=z[layer_index] + offset[layer_index]
-        # )
-        # print(Aprof_[20,0,4])
-        # print(options.wavelength[20])
-        # assert(1==0)
-        part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
-        part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
-        part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
-        part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
-        result = np.real(part2) # + part2) # + part3 + part4)
-        print(z.shape)
-        print(Aprof_.shape)
-        print(result.shape)
-        t1 = time.time()
-        result = B[:,:,None]*result
-        print(time.time()-t1)
-        print(result.shape)
-        result = np.sum(result,axis=1)
-        print(result.shape) # wl then z
+        # t1 = time.time()
+        # result = front_local_angles[:,:,None]*result
+        # result = np.sum(result,axis=1)
 
-        # need to do the one from the back
-        Aprof_ = Aprof[0][1] # backside 
-        print(vf_2[0].shape)
-        print(local_angle_mats[0][1].shape)
-        print(v0.shape)
-        print(v0[20])
-        print(vf_2[0][20])
-        B = np.einsum('ij,jk->ik',vf_2[0],local_angle_mats[0][1])
-        # print(Aprof_[20,0,4])
-        # print(options.wavelength[20])
-        # assert(1==0)
-        part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
-        part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
-        part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
-        part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
-        result2 = np.real(part2) # + part2) # + part3 + part4)
-        print(z.shape)
-        print(Aprof_.shape)
-        print(result2.shape)
-        t1 = time.time()
-        result2 = B[:,:,None]*result2
-        print(time.time()-t1)
-        print(result2.shape)
-        result2 = np.sum(result2,axis=1)
-        print(result2.shape) # wl then z
+        # # need to do the one from the back
+        # Aprof_ = Aprof[0][1] # backside 
 
-        # not sure if result2 need flipping or something
-        # plt.plot(z,result[20])
+        total_vf_2 = [np.sum(item, axis=0) for item in vf_2]
+        rear_local_angles = np.einsum('ij,jk->ik',total_vf_2[0],local_angle_mats[0][1])
+        # part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
+        # part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
+        # part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
+        # part4 = (Aprof_[:,:,2,None] - 1j * Aprof_[:,:,3,None])*np.exp(-1j * Aprof_[:,:,5,None]*z)
+        # result2 = np.real(part1 + part2 + part3 + part4)
+        # t1 = time.time()
+        # result2 = rear_local_angles[:,:,None]*result2
+        # result2 = np.sum(result2,axis=1)
+
+        # # not sure if result2 need flipping or something
+        # plt.plot(z,result[0])
         # plt.show()
-        # plt.plot(z,result2[20])
+        # plt.plot(z,result2[0])
         # plt.show()
-        # print(options.wavelength[20])
+        # print(options.wavelength[0])
+
+        # #still need to normalize to sum over iteration of a[0][iteration][layer]
         # assert(1==0)
 
         # result += result2
@@ -859,7 +820,7 @@ def matrix_multiplication(
 
                 RAT = xr.merge([R, A_bulk, T, Tfirst])
 
-                grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass})
+                grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'Aprof':Aprof, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles})
 
         else:
             RAT = xr.merge([R, Tfirst])
