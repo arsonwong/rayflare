@@ -466,6 +466,8 @@ def matrix_multiplication(
         vb_1 = [[] for _ in range(n_interfaces)]
         vf_2 = [[] for _ in range(n_interfaces)]
         vb_2 = [[] for _ in range(n_interfaces)]
+        total_vf_1 = [None for _ in range(n_interfaces)]
+        total_vb_2 = [None for _ in range(n_interfaces)]
 
         if False: #np.any(len_calcs > 0) or options.bulk_profile:
             # need to calculate profiles in either the bulk or the interfaces
@@ -642,6 +644,10 @@ def matrix_multiplication(
                         vf_1[i1] = dot_wl_u2d(down2up, vf_1[i1])  # outgoing to incoming
                     if front_roughness[i1] is not None:
                         vf_1[i1] = dot_wl(front_roughness[i1], vf_1[i1]) # roughness scatter
+                    if total_vf_1[i1] is None:
+                        total_vf_1[i1] = vf_1[i1]
+                    else:
+                        total_vf_1[i1] += vf_1[i1]
                     vb_1[i1].append(dot_wl(D[i1], vf_1[i1]))  # pass through bulk, downwards
                     A[i1].append(np.sum(vf_1[i1], 1) - np.sum(vb_1[i1][-1], 1))
 
@@ -649,6 +655,11 @@ def matrix_multiplication(
 
                     if rear_roughness[i1] is not None:
                         vb_2[i1] = dot_wl(rear_roughness[i1], vb_2[i1]) # roughness scatter
+                    if total_vb_2[i1] is None:
+                        total_vb_2[i1] = vb_2[i1]
+                    else:
+                        total_vb_2[i1] += vb_2[i1]
+
                     vf_2[i1].append(dot_wl(D[i1], vb_2[i1]))  # pass through bulk, upwards
 
                     # vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
@@ -680,7 +691,9 @@ def matrix_multiplication(
         else:
             Aprof = Aprof.loc[dict(pol=options["pol"])].values
 
-        # Aprof_ = Aprof[0][0] #layer1,side1
+        # --------------------------------------
+
+        # Aprof_ = Aprof[5][0] #layer6,side1
 
         # depth_spacing = options["depth_spacing"]*1e9
 
@@ -708,10 +721,14 @@ def matrix_multiplication(
         # result = np.sum(result,axis=1)
 
         # # need to do the one from the back
-        # Aprof_ = Aprof[0][1] # backside 
+        # Aprof_ = Aprof[5][1] # backside 
+
+        # --------------------------------------------------
 
         total_vf_2 = [np.sum(item, axis=0) for item in vf_2]
         rear_local_angles = np.einsum('ij,jk->ik',total_vf_2[0],local_angle_mats[0][1])
+
+        # --------------------------------------------------------------------
         # part1 = Aprof_[:,:,0,None]*np.exp(Aprof_[:,:,4,None]*z)
         # part2 = Aprof_[:,:,1,None]*np.exp(-Aprof_[:,:,4,None]*z)
         # part3 = (Aprof_[:,:,2,None] + 1j * Aprof_[:,:,3,None])*np.exp(1j * Aprof_[:,:,5,None]*z)
@@ -744,6 +761,8 @@ def matrix_multiplication(
         # plt.show()
 
         # assert(1==0)
+
+        # ----------------------------------------------------------------------------
 
 
         sum_dims = ["bulk_index", "wl"]
@@ -820,7 +839,34 @@ def matrix_multiplication(
 
                 RAT = xr.merge([R, A_bulk, T, Tfirst])
 
-                grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'Aprof':Aprof, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles})
+                # let's do some bulk absorption calcs here
+                abscos = 1./np.cos(thetas)
+                # print(bulk_thick[0]) # in m
+                # z = np.arange(0, bulk_thick[0], 1e-6)
+                # print(z)
+                alphas = bulk_mats[0].alpha(options["wavelength"])
+
+                # wavelength, angles
+                absorbed_fraction = 1 - np.exp(-alphas[:,None] * bulk_thick[0] / abscos[None, :])
+
+                # print(absorbed_fraction.shape)
+                # print(total_vf_1[0].shape)
+
+                bulk_absorbed_front = total_vf_1[0]*absorbed_fraction
+                bulk_absorbed_rear = total_vb_2[0]*absorbed_fraction
+
+                # # wavelength, angles, z
+                # absorption_profile = np.exp(-alphas[:,None,None] * z[None,None,:] / abscos[None, :, None])
+                # absorption_profile_sum = np.sum(absorption_profile, axis=2)
+                # absorption_profile = absorption_profile/absorption_profile_sum[:,:,None]*bulk_absorbed_front[:,:,None]
+
+                # # wavelength, z
+                # # has the property that summing over z entries result in absorbed
+                # absorption_profile = np.sum(absorption_profile, axis=1)
+                # print(absorption_profile.shape)
+
+
+                grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'Aprof':Aprof, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles, 'bulk_absorbed_front': bulk_absorbed_front, 'bulk_absorbed_rear': bulk_absorbed_rear, 'alphas':alphas, 'abscos': abscos})
 
         else:
             RAT = xr.merge([R, Tfirst])

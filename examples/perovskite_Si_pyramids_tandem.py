@@ -166,6 +166,68 @@ results = calculate_RAT(SC, options)
 RAT = results[0]['RAT']
 results_per_pass = results[0]['results_per_pass']
 
+Aprof = results[0]['Aprof']
+front_local_angles = results[0]['front_local_angles']
+rear_local_angles = results[0]['rear_local_angles']
+bulk_absorbed_front = results[0]['bulk_absorbed_front']
+bulk_absorbed_rear = results[0]['bulk_absorbed_rear']
+alphas = results[0]['alphas']
+abscos = results[0]['abscos']
+
+def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, z_front):
+    z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
+    z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
+    z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
+    absorption_profile_front = np.exp(-alphas[:,None,None] * z_front[None,None,:] / abscos[None, :, None])
+    absorption_profile_integral = np.sum(absorption_profile_front*z_front_widths[None, None, :], axis=2)
+    absorption_profile_front *= bulk_absorbed_front[:,:,None]/absorption_profile_integral[:,:,None]
+    absorption_profile_front = np.sum(absorption_profile_front, axis=1)
+
+    z_rear = z_front[-1] - z_front
+    z_rear_widths = z_front_widths
+    absorption_profile_rear = np.exp(-alphas[:,None,None] * z_rear[None,None,:] / abscos[None, :, None])
+    absorption_profile_integral = np.sum(absorption_profile_rear*z_rear_widths[None, None, :], axis=2)
+    absorption_profile_rear *= bulk_absorbed_rear[:,:,None]/absorption_profile_integral[:,:,None]
+    absorption_profile_rear = np.sum(absorption_profile_rear, axis=1)
+    return absorption_profile_front, absorption_profile_rear, z_front_widths
+
+z_front = np.arange(0, 260e-6, 1e-6)
+absorption_profile_front, absorption_profile_rear, z_front_widths = bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, z_front)
+plt.plot(z_front,absorption_profile_front[160,:])
+plt.plot(z_front,absorption_profile_rear[160,:])
+plt.show()
+
+def layer_profile(Aprof_front, Aprof_rear, overall_A, z_front):
+    part1 = Aprof_front[:,:,0,None]*np.exp(Aprof_front[:,:,4,None]*z_front)
+    part2 = Aprof_front[:,:,1,None]*np.exp(-Aprof_front[:,:,4,None]*z_front)
+    part3 = (Aprof_front[:,:,2,None] + 1j * Aprof_front[:,:,3,None])*np.exp(1j * Aprof_front[:,:,5,None]*z_front)
+    part4 = (Aprof_front[:,:,2,None] - 1j * Aprof_front[:,:,3,None])*np.exp(-1j * Aprof_front[:,:,5,None]*z_front)
+    result = np.real(part1 + part2 + part3 + part4)
+    absorption_profile_front = front_local_angles[:,:,None]*result
+    absorption_profile_front = np.sum(absorption_profile_front,axis=1)
+
+    z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
+    z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
+    z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
+
+    z_rear = z_front[-1]-z_front
+    part1 = Aprof_rear[:,:,0,None]*np.exp(Aprof_rear[:,:,4,None]*z_rear)
+    part2 = Aprof_rear[:,:,1,None]*np.exp(-Aprof_rear[:,:,4,None]*z_rear)
+    part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
+    part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
+    result = np.real(part1 + part2 + part3 + part4)
+    absorption_profile_rear = rear_local_angles[:,:,None]*result
+    absorption_profile_rear = np.sum(absorption_profile_rear,axis=1)
+
+    absorption_profile_integral = np.sum((absorption_profile_front+absorption_profile_rear)*z_front_widths[None, :], axis=1)
+    absorption_profile_front *= overall_A[:,None]/absorption_profile_integral[:,None]
+    absorption_profile_rear *= overall_A[:,None]/absorption_profile_integral[:,None]
+
+    return absorption_profile_front, absorption_profile_rear, z_front_widths
+
+z_front = np.arange(0, 500e-9*1e9, 10e-9*1e9)
+Aprof_front = Aprof[5][0] #layer1,side1
+Aprof_rear = Aprof[5][1] # backside 
 
 R_per_pass = np.sum(results_per_pass["r"][0], 2)
 R_0 = R_per_pass[0]
@@ -174,6 +236,15 @@ R_escape = np.sum(R_per_pass[1:, :], 0)
 # only select absorbing layers, sum over passes
 results_per_layer_front = np.sum(results_per_pass["a"][0], 0)[:, [0, 1, 3, 6, 7, 8]]
 results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
+A_pero = results_pero[:,0] # just flatten
+
+print(results_pero.shape)
+absorption_profile_front, absorption_profile_rear, z_front_widths = layer_profile(Aprof_front, Aprof_rear, A_pero, z_front)
+plt.plot(z_front,absorption_profile_front[80])
+plt.show()
+plt.plot(z_front,absorption_profile_rear[80])
+plt.show()
+assert(1==0)
 
 results_per_layer_back = np.sum(results_per_pass["a"][1], 0)
 
@@ -192,7 +263,6 @@ spectr_flux = LightSource(
 ).spectrum(wavelengths)[1]
 
 A_Si = RAT["A_bulk"][0]
-A_pero = results_pero[:,0]
 Jph_Si = q * np.trapz(RAT["A_bulk"][0] * spectr_flux, wavelengths) / 10  # mA/cm2
 Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 

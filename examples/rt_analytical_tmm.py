@@ -53,6 +53,19 @@ options.detailed = True
 # Get the current directory
 current_dir = os.getcwd()
 
+def create_new_material(name, n_file_path, k_file_path=None):
+    mat = material(name)()
+    mat.n_path = n_file_path
+    if k_file_path is not None:
+        mat.k_path = k_file_path
+        mat.load_n_data()
+        mat.load_k_data()
+    else:
+        mat.load_nk_data()
+    return mat
+
+
+
 # set up Solcore materials
 Air = material("Air")()
 material_names = ["Si_", "SiNx_", "SiO2_", "air_", "lossy_air_", "glass_", "heavy_ITO_", "ITO_", "aSip_", "aSin_", "aSii_", "Si_5_5e19_", "Si_1_2e10_", "Si_1_9e10_", "Al2O3_"]
@@ -60,9 +73,10 @@ dict = {element: index for index, element in enumerate(material_names)}
 materials = []
 pathnames = ["Si_Crystalline, 300 K [Gre08].csv", "SiNx_PECVD [Bak11].csv", "SiO2_[Rao19].csv", "air.csv", "lossy_air.csv", "glass.csv", "ITO_Sputtered 6.1e20 [Hol13].csv", "ITO_Sputtered 0.78e20 [Hol13].csv", "Si_Amorphous p [Hol12].csv", "Si_Amorphous n [Hol12].csv", "Si_Amorphous i [Hol12].csv", "Si_Crystalline_n_doped_5_5e19.csv", "Si_Crystalline_n_doped_1_2e20.csv", "Si_Crystalline_n_doped_1_9e20.csv", "Al2O3_ALD on Si [Kim97].csv"]
 for i, name in enumerate(material_names):
-    mat = material(material_names[i])()
-    mat.n_path = os.path.join(current_dir, r"PVL_benchmark", pathnames[i])
-    mat.k_path = mat.n_path
+    # mat = material(material_names[i])()
+    # mat.n_path = os.path.join(current_dir, r"PVL_benchmark", pathnames[i])
+    # mat.k_path = mat.n_path
+    path_ = os.path.join(current_dir, r"PVL_benchmark", pathnames[i])
     if name == "ITO_":
         path_ = [{'parameter':0.17e20,'path':'ITO_Sputtered 0.17e20 [Hol13].csv'},
                  {'parameter':0.30e20,'path':'ITO_Sputtered 0.30e20 [Hol13].csv'},
@@ -74,10 +88,12 @@ for i, name in enumerate(material_names):
                 {'parameter':6.1e20,'path':'ITO_Sputtered 6.1e20 [Hol13].csv'}]
         for entry in path_:
             entry['path'] = os.path.join(current_dir, r"PVL_benchmark", entry['path'])
-        mat.n_path = path_
-        mat.k_path = path_
-    mat.load_n_data()
-    mat.load_k_data()
+        # mat.n_path = path_
+        # mat.k_path = path_
+    # mat.load_n_data()
+    # mat.load_k_data()
+    # mat.load_nk_data()
+    mat = create_new_material(material_names[i],path_)
     materials.append(mat)
 
 def sel_mat(name):
@@ -101,6 +117,7 @@ front_surf_planar = Interface(
 )
 back_surf_pyr = Interface("RT_analytical_TMM", layers=back_materials, texture=surf_pyr_upright, name="SiN_TMM", coherent=True)
 back_surf_planar = Interface("TMM", layers=back_materials, texture=surf_planar, name="SiN_TMM", coherent=True)
+# bulk_Si = BulkLayer(180e-6, sel_mat("Si_"), name="Si_bulk")  # bulk thickness in m, make very thick
 bulk_Si = BulkLayer(1e-6, sel_mat("glass_"), name="Si_bulk")  # bulk thickness in m, make very thick
 # SC = Structure([front_surf_planar, bulk_Si, back_surf_planar], incidence=Air, transmission=Air) #sel_mat("Si_"))
 # plan to do 
