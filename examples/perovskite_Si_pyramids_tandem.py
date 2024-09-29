@@ -174,7 +174,7 @@ bulk_absorbed_rear = results[0]['bulk_absorbed_rear']
 alphas = results[0]['alphas']
 abscos = results[0]['abscos']
 
-def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, z_front):
+def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, alphas, abscos, z_front):
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
@@ -192,7 +192,7 @@ def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, z_front):
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
 z_front = np.arange(0, 260e-6, 1e-6)
-absorption_profile_front, absorption_profile_rear, z_front_widths = bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, z_front)
+absorption_profile_front, absorption_profile_rear, z_front_widths = bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, alphas, abscos, z_front)
 plt.plot(z_front,absorption_profile_front[160,:])
 plt.plot(z_front,absorption_profile_rear[160,:])
 plt.show()
