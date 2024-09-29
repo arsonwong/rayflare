@@ -197,7 +197,7 @@ plt.plot(z_front,absorption_profile_front[160,:])
 plt.plot(z_front,absorption_profile_rear[160,:])
 plt.show()
 
-def layer_profile(Aprof_front, Aprof_rear, overall_A, z_front):
+def layer_profile(Aprof_front, Aprof_rear, front_local_angles, rear_local_angles, overall_A, z_front):
     part1 = Aprof_front[:,:,0,None]*np.exp(Aprof_front[:,:,4,None]*z_front)
     part2 = Aprof_front[:,:,1,None]*np.exp(-Aprof_front[:,:,4,None]*z_front)
     part3 = (Aprof_front[:,:,2,None] + 1j * Aprof_front[:,:,3,None])*np.exp(1j * Aprof_front[:,:,5,None]*z_front)
@@ -239,7 +239,7 @@ results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
 A_pero = results_pero[:,0] # just flatten
 
 print(results_pero.shape)
-absorption_profile_front, absorption_profile_rear, z_front_widths = layer_profile(Aprof_front, Aprof_rear, A_pero, z_front)
+absorption_profile_front, absorption_profile_rear, z_front_widths = layer_profile(Aprof_front, Aprof_rear, A_pero, front_local_angles, rear_local_angles, z_front)
 plt.plot(z_front,absorption_profile_front[80])
 plt.show()
 plt.plot(z_front,absorption_profile_rear[80])
