@@ -57,7 +57,12 @@ def create_new_material(name, n_file_path, k_file_path=None):
         mat.load_nk_data()
     return mat
 
-def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, alphas, abscos, z_front):
+def bulk_profile(results, z_front):
+    bulk_absorbed_front = results[0]['bulk_absorbed_front']
+    bulk_absorbed_rear = results[0]['bulk_absorbed_rear']
+    alphas = results[0]['alphas']
+    abscos = results[0]['abscos']
+
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
@@ -72,14 +77,32 @@ def bulk_profile(bulk_absorbed_front, bulk_absorbed_rear, alphas, abscos, z_fron
     absorption_profile_integral = np.sum(absorption_profile_rear*z_rear_widths[None, None, :], axis=2)
     absorption_profile_rear *= bulk_absorbed_rear[:,:,None]/absorption_profile_integral[:,:,None]
     absorption_profile_rear = np.sum(absorption_profile_rear, axis=1)
+    plt.plot(z_front*1e6,absorption_profile_front[140,:]+absorption_profile_rear[140,:], label='WL=1000nm')
+    plt.plot(z_front*1e6,absorption_profile_front[130,:]+absorption_profile_rear[130,:], label='WL=950nm')
+    plt.xlabel('z (um)')
+    plt.ylabel('absorption (arb unit)')
+    plt.legend()
+    plt.title('Absorption profile in Si')
+    plt.show()
+
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
-def layer_profile(Aprof_front, Aprof_rear, front_local_angles, rear_local_angles, overall_A, z_front):
+def layer_profile(results, z_front):
+    results_per_pass = results[0]['results_per_pass']
+    results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
+    overall_A = results_pero[:,0] # just flatten
+
+    Aprof = results[0]['Aprof']
+    Aprof_front = Aprof[5][0] #layer1,side1
+    Aprof_rear = Aprof[5][1] # backside 
+    front_local_angles = results[0]['front_local_angles']
+    rear_local_angles = results[0]['rear_local_angles']
+
     part1 = Aprof_front[:,:,0,None]*np.exp(Aprof_front[:,:,4,None]*z_front)
     part2 = Aprof_front[:,:,1,None]*np.exp(-Aprof_front[:,:,4,None]*z_front)
     part3 = (Aprof_front[:,:,2,None] + 1j * Aprof_front[:,:,3,None])*np.exp(1j * Aprof_front[:,:,5,None]*z_front)
     part4 = (Aprof_front[:,:,2,None] - 1j * Aprof_front[:,:,3,None])*np.exp(-1j * Aprof_front[:,:,5,None]*z_front)
-    result = np.real(part1 + part2 + part3 + part4)
+    result = np.real(part1 + part2 + 0*part3 + 0*part4)
     absorption_profile_front = front_local_angles[:,:,None]*result
     absorption_profile_front = np.sum(absorption_profile_front,axis=1)
 
@@ -92,13 +115,21 @@ def layer_profile(Aprof_front, Aprof_rear, front_local_angles, rear_local_angles
     part2 = Aprof_rear[:,:,1,None]*np.exp(-Aprof_rear[:,:,4,None]*z_rear)
     part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
     part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
-    result = np.real(part1 + part2 + part3 + part4)
+    result = np.real(part1 + part2 + 0*part3 + 0*part4)
     absorption_profile_rear = rear_local_angles[:,:,None]*result
     absorption_profile_rear = np.sum(absorption_profile_rear,axis=1)
 
     absorption_profile_integral = np.sum((absorption_profile_front+absorption_profile_rear)*z_front_widths[None, :], axis=1)
     absorption_profile_front *= overall_A[:,None]/absorption_profile_integral[:,None]
     absorption_profile_rear *= overall_A[:,None]/absorption_profile_integral[:,None]
+
+    plt.plot(z_front,absorption_profile_front[60]+absorption_profile_rear[60], label='WL=600nm')
+    plt.plot(z_front,absorption_profile_front[80]+absorption_profile_rear[80], label='WL=700nm')
+    plt.xlabel('z (nm)')
+    plt.ylabel('absorption (arb unit)')
+    plt.legend()
+    plt.title('Absorption profile in perovskite')
+    plt.show()
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
@@ -214,7 +245,7 @@ def set_bulk_thickness(thickness):
     bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
     return bulk_Si
 
-def run_simulation(surf, surf_back, bulk_Si):
+def run_simulation(front_materials, back_materials, surf, surf_back, bulk_Si):
     front_surf = Interface(
     "RT_analytical_TMM",
     texture=surf,
@@ -324,7 +355,7 @@ with open(input_file_path, 'r') as input_file, open(output_file_path, 'a') as ou
     while True:
         line = input_file.readline()
         if not line:
-            time.sleep(5)  # Sleep briefly before trying again
+            time.sleep(0.01)  # Sleep briefly before trying again
             continue
         print(f"New line: {line.strip()}")
         try:
