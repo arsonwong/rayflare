@@ -12,8 +12,8 @@ from solcore import material
 from solcore.light_source import LightSource
 from solcore.constants import q
 
-from rayflare.textures import regular_pyramids
-from rayflare.structure import Interface, BulkLayer, Structure
+from rayflare.textures import planar_surface, regular_pyramids
+from rayflare.structure import Interface, BulkLayer, Structure, Roughness
 from rayflare.matrix_formalism import calculate_RAT, process_structure
 from rayflare.utilities import get_savepath
 from rayflare.options import default_options
@@ -46,16 +46,19 @@ from cycler import cycler
 # python also has result = eval(expression)
 # just literally spell out all the expressions in matlab
 
-def create_new_material(name, n_file_path, k_file_path=None):
+def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     mat = material(name)()
-    mat.n_path = n_file_path
+    n_file_path = n_file_path.replace("\\", "/")
+    mat.n_path = n_file_path    
     if k_file_path is not None:
+        k_file_path = k_file_path.replace("\\", "/")
         mat.k_path = k_file_path
         mat.load_n_data()
         mat.load_k_data()
     else:
         mat.load_nk_data()
-    return mat
+    layer = Layer(thickness*1e-9, mat)
+    return layer
 
 def bulk_profile(results, z_front):
     bulk_absorbed_front = results[0]['bulk_absorbed_front']
@@ -245,18 +248,31 @@ def set_bulk_thickness(thickness):
     bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
     return bulk_Si
 
-def run_simulation(front_materials, back_materials, surf, surf_back, bulk_Si):
+def run_simulation(front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si):
+    method = "RT_analytical_TMM"
+    if surf[0].N.shape[0]==2: #planar
+        method = "TMM"
     front_surf = Interface(
-    "RT_analytical_TMM",
+    method,
     texture=surf,
     layers=front_materials,
     name="Perovskite_aSi_widthcorr",
     coherent=True,
     prof_layers=[6] #hopefully with 1-indexed, that is pero
     )
-    back_surf = Interface("RT_analytical_TMM", texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
+    method = "RT_analytical_TMM"
+    if surf_back[0].N.shape[0]==2: #planar
+        method = "TMM"
+    back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
 
-    SC = Structure([front_surf, bulk_Si, back_surf], incidence=Air, transmission=Ag)
+    list_ = [front_surf]
+    if front_roughness is not None:
+        list_.append(front_roughness)
+    list_.append(bulk_Si)
+    if rear_roughness is not None:
+        list_.append(rear_roughness)
+    list_.append(back_surf)
+    SC = Structure(list_, incidence=Air, transmission=Ag)
 
     process_structure(SC, options, overwrite=True)
     results = calculate_RAT(SC, options)
@@ -358,12 +374,13 @@ with open(input_file_path, 'r') as input_file, open(output_file_path, 'a') as ou
             time.sleep(0.01)  # Sleep briefly before trying again
             continue
         print(f"New line: {line.strip()}")
-        try:
-            exec(line.strip())
-        except Exception as e:
-            # This block will catch any exception and print the error message
-            print(f"An error occurred: {e}")
-            break
+        exec(line.strip())
+        # try:
+        #     exec(line.strip())
+        # except Exception as e:
+        #     # This block will catch any exception and print the error message
+        #     print(f"An error occurred: {e}")
+        #     break
         # Write the new line to the output file
         output_file.write(line)
         output_file.flush()  # Ensure the line is written to the file immediately
