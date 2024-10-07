@@ -100,6 +100,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             # Check: is this an interface type which requires a lookup table?
 
             if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM" or struct.method == "TMM":
+                if 'output_file' in options:
+                    front_rear = ['front', 'rear']
+                    output_file = options['output_file']
+                    output_file.write("0:Rayflare Server: Making lookup table for " + front_rear[min(i1,1)] + "\n")
+                    output_file.flush()  # Ensure the line is written to the file immediately
+
                 logger.info(f"Making RT/TMM lookuptable for element {i1} in structure")
                 if i1 == 0:  # top interface
                     incidence = SC.incidence
@@ -220,6 +226,12 @@ def process_structure(SC, options, save_location="default", overwrite=False):
     )
     
     for i1, struct in enumerate(SC):
+        if 'output_file' in options:
+            front_rear = ['front', 'rear']
+            output_file = options['output_file']
+            output_file.write("0:Rayflare Server: Doing ray tracing for " + front_rear[min(i1,1)] + "\n")
+            output_file.flush()  # Ensure the line is written to the file immediately
+
         if isinstance(struct, BulkLayer):
             SC.bulkIndices.append(i1)
             get_wavelength(options)

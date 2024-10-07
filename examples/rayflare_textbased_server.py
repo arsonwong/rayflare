@@ -27,7 +27,7 @@ import seaborn as sns
 
 from cycler import cycler
 
-
+output_file = None
 
 # can define material by loading nk files made by Griddler, e.g. doped silicon
 # still need to parameterize to silicon
@@ -248,7 +248,11 @@ def set_bulk_thickness(thickness):
     bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
     return bulk_Si
 
-def run_simulation(front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si):
+def run_simulation(front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si, active_layer_index, out_path=None):
+    global output_file, options
+    options['output_file'] = output_file
+    output_file.write("0:Rayflare Server: Setting up the layers\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
     method = "RT_analytical_TMM"
     if surf[0].N.shape[0]==2: #planar
         method = "TMM"
@@ -258,7 +262,7 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
     layers=front_materials,
     name="Perovskite_aSi_widthcorr",
     coherent=True,
-    prof_layers=[6] #hopefully with 1-indexed, that is pero
+    prof_layers=[active_layer_index] #hopefully with 1-indexed, that is pero
     )
     method = "RT_analytical_TMM"
     if surf_back[0].N.shape[0]==2: #planar
@@ -274,8 +278,18 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
     list_.append(back_surf)
     SC = Structure(list_, incidence=Air, transmission=Ag)
 
+    output_file.write("0:Rayflare Server: Processing the structure\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
+
     process_structure(SC, options, overwrite=True)
+
+    output_file.write("0:Rayflare Server: Tracing the angular distributions\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
+
     results = calculate_RAT(SC, options)
+
+    output_file.write("0:Rayflare Server: Post-processing\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
 
     RAT = results[0]['RAT']
     results_per_pass = results[0]['results_per_pass']
@@ -288,7 +302,7 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
 
     # only select absorbing layers, sum over passes
     results_per_layer_front = np.sum(results_per_pass["a"][0], 0)[:, [0, 1, 3, 6, 7, 8]]
-    results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
+    results_pero = np.sum(results_per_pass["a"][0], 0)[:, [active_layer_index-1]]
     A_pero = results_pero[:,0] # just flatten
 
     allres = np.flip(
@@ -308,49 +322,52 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
     Jph_Si = q * np.trapz(RAT["A_bulk"][0] * spectr_flux, wavelengths) / 10  # mA/cm2
     Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
+    # pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
 
+    # # plot total R, A, T
+    # fig = plt.figure(figsize=(5, 4))
+    # ax = plt.subplot(111)
+    # ax.stackplot(
+    #     options["wavelength"] * 1e9,
+    #     allres.T,
+    #     labels=[
+    #         "c-Si (bulk)",
+    #         "Perovskite",
+    #         "Ag",
+    #         "rear ITO",
+    #         "aSi-p",
+    #         "aSi-i",
+    #         "aSi-i",
+    #         "aSi-n",
+    #         "front ITO",
+    #         "C$_{60}$",
+    #         "IZO",
+    #         "MgF$_2$",
+    #         "R$_{escape}$",
+    #         "R$_0$",
+    #     ],
+    #     colors=pal,
+    # )
 
-    pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
+    # min_wl = np.ceil(np.min(wavelengths*1e9))
+    # max_wl = np.floor(np.max(wavelengths*1e9))
+    # min_wl = min_wl.astype(int)
+    # max_wl = max_wl.astype(int)
 
-    # plot total R, A, T
-    fig = plt.figure(figsize=(5, 4))
-    ax = plt.subplot(111)
-    ax.stackplot(
-        options["wavelength"] * 1e9,
-        allres.T,
-        labels=[
-            "c-Si (bulk)",
-            "Perovskite",
-            "Ag",
-            "rear ITO",
-            "aSi-p",
-            "aSi-i",
-            "aSi-i",
-            "aSi-n",
-            "front ITO",
-            "C$_{60}$",
-            "IZO",
-            "MgF$_2$",
-            "R$_{escape}$",
-            "R$_0$",
-        ],
-        colors=pal,
-    )
+    # lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
+    # ax.set_xlabel("Wavelength (nm)")
+    # ax.set_ylabel("R/A/T")
+    # ax.set_xlim(300, 1200)
+    # ax.set_ylim(0, 1.0)
+    # ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
+    # ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 
-    min_wl = np.ceil(np.min(wavelengths*1e9))
-    max_wl = np.floor(np.max(wavelengths*1e9))
-    min_wl = min_wl.astype(int)
-    max_wl = max_wl.astype(int)
+    # plt.show()
 
-    lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
-    ax.set_xlabel("Wavelength (nm)")
-    ax.set_ylabel("R/A/T")
-    ax.set_xlim(300, 1200)
-    ax.set_ylim(0, 1.0)
-    ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
-    ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
-
-    plt.show()
+    if out_path is not None:
+        output = np.array([wavelengths*1e9, A_pero, A_Si]).T
+        df = pd.DataFrame(output, columns=['Wavelength(nm)', 'A_pero', 'A_Si'])
+        df.to_csv(out_path, index=False)        
 
     return results
 
@@ -364,7 +381,12 @@ with open(input_file_path, 'w') as file:
 with open(output_file_path, 'w') as file:
     pass  # Just opening the file is enough to erase its contents
 
-with open(input_file_path, 'r') as input_file, open(output_file_path, 'a') as output_file:
+with open(input_file_path, 'r') as input_file:
+    output_file = open(output_file_path, 'a')
+
+    output_file.write("0:Rayflare Server: Setting up the layers\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
+
     # Move to the end of the file
     input_file.seek(0, 2) 
     
@@ -373,8 +395,10 @@ with open(input_file_path, 'r') as input_file, open(output_file_path, 'a') as ou
         if not line:
             time.sleep(0.01)  # Sleep briefly before trying again
             continue
+        print(line)
+        line_after_colon = line.split(":",1)[1]
         print(f"New line: {line.strip()}")
-        exec(line.strip())
+        exec(line_after_colon)
         # try:
         #     exec(line.strip())
         # except Exception as e:
@@ -384,3 +408,4 @@ with open(input_file_path, 'r') as input_file, open(output_file_path, 'a') as ou
         # Write the new line to the output file
         output_file.write(line)
         output_file.flush()  # Ensure the line is written to the file immediately
+    output_file.close()
