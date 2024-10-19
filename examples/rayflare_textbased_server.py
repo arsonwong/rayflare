@@ -46,7 +46,7 @@ output_file = None
 # python also has result = eval(expression)
 # just literally spell out all the expressions in matlab
 
-def create_new_layer(name, thickness, n_file_path, k_file_path=None):
+def create_new_material(name, n_file_path, k_file_path=None):
     mat = material(name)()
     n_file_path = n_file_path.replace("\\", "/")
     mat.n_path = n_file_path    
@@ -57,6 +57,10 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
         mat.load_k_data()
     else:
         mat.load_nk_data()
+    return mat
+
+def create_new_layer(name, thickness, n_file_path, k_file_path=None):
+    mat = create_new_material(name, n_file_path, k_file_path)
     layer = Layer(thickness*1e-9, mat)
     return layer
 
@@ -178,12 +182,13 @@ wavelengths = np.arange(300,1201,5) * 1e-9
 
 options = default_options()
 options.wavelength = wavelengths
-# options.only_incidence_angle = True
+options.only_incidence_angle = False
 # options.lookuptable_angles = 200
 # options.parallel = True
 options.project_name = "perovskite_Si_example"
 options.n_rays = 2000
-options.n_theta_bins = 30
+options.n_theta_bins = 30 #90
+options.c_azimuth = 0.25 #1.00
 options.nx = 2
 options.ny = 2
 options.depth_spacing = 1e-9
@@ -248,7 +253,8 @@ def set_bulk_thickness(thickness):
     bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
     return bulk_Si
 
-def run_simulation(front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si, active_layer_index, out_path=None):
+def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si, active_layer_index, out_path=None):
+    t1 = time.time()
     global output_file, options
     options['output_file'] = output_file
     output_file.write("0:Rayflare Server: Setting up the layers\n")
@@ -276,7 +282,7 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
     if rear_roughness is not None:
         list_.append(rear_roughness)
     list_.append(back_surf)
-    SC = Structure(list_, incidence=Air, transmission=Ag)
+    SC = Structure(list_, incidence=top_medium, transmission=bottom_medium)
 
     output_file.write("0:Rayflare Server: Processing the structure\n")
     output_file.flush()  # Ensure the line is written to the file immediately
@@ -322,47 +328,49 @@ def run_simulation(front_materials, front_roughness, back_materials, rear_roughn
     Jph_Si = q * np.trapz(RAT["A_bulk"][0] * spectr_flux, wavelengths) / 10  # mA/cm2
     Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
-    # pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
+    print("Time: ", time.time()-t1)
 
-    # # plot total R, A, T
-    # fig = plt.figure(figsize=(5, 4))
-    # ax = plt.subplot(111)
-    # ax.stackplot(
-    #     options["wavelength"] * 1e9,
-    #     allres.T,
-    #     labels=[
-    #         "c-Si (bulk)",
-    #         "Perovskite",
-    #         "Ag",
-    #         "rear ITO",
-    #         "aSi-p",
-    #         "aSi-i",
-    #         "aSi-i",
-    #         "aSi-n",
-    #         "front ITO",
-    #         "C$_{60}$",
-    #         "IZO",
-    #         "MgF$_2$",
-    #         "R$_{escape}$",
-    #         "R$_0$",
-    #     ],
-    #     colors=pal,
-    # )
+    pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
 
-    # min_wl = np.ceil(np.min(wavelengths*1e9))
-    # max_wl = np.floor(np.max(wavelengths*1e9))
-    # min_wl = min_wl.astype(int)
-    # max_wl = max_wl.astype(int)
+    # plot total R, A, T
+    fig = plt.figure(figsize=(5, 4))
+    ax = plt.subplot(111)
+    ax.stackplot(
+        options["wavelength"] * 1e9,
+        allres.T,
+        labels=[
+            "c-Si (bulk)",
+            "Perovskite",
+            "Ag",
+            "rear ITO",
+            "aSi-p",
+            "aSi-i",
+            "aSi-i",
+            "aSi-n",
+            "front ITO",
+            "C$_{60}$",
+            "IZO",
+            "MgF$_2$",
+            "R$_{escape}$",
+            "R$_0$",
+        ],
+        colors=pal,
+    )
 
-    # lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
-    # ax.set_xlabel("Wavelength (nm)")
-    # ax.set_ylabel("R/A/T")
-    # ax.set_xlim(300, 1200)
-    # ax.set_ylim(0, 1.0)
-    # ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
-    # ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
+    min_wl = np.ceil(np.min(wavelengths*1e9))
+    max_wl = np.floor(np.max(wavelengths*1e9))
+    min_wl = min_wl.astype(int)
+    max_wl = max_wl.astype(int)
 
-    # plt.show()
+    lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
+    ax.set_xlabel("Wavelength (nm)")
+    ax.set_ylabel("R/A/T")
+    ax.set_xlim(300, 1200)
+    ax.set_ylim(0, 1.0)
+    ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
+    ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
+
+    plt.show()
 
     if out_path is not None:
         output = np.array([wavelengths*1e9, A_pero, A_Si]).T
