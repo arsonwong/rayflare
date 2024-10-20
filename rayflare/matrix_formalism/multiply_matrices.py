@@ -638,42 +638,56 @@ def matrix_multiplication(
             # rep
             i2 = 1
 
+            vf_1[0][-1] = dot_wl_u2d(down2up, vf_1[0][-1])  # outgoing to incoming
+
             if n_bulks==0:
                 break
 
             while np.any(power > options["I_thresh"]):
-                if i2==1:
-                    vf_1[i1][-1] = dot_wl_u2d(down2up, vf_1[i1][-1])  # outgoing to incoming
-                if front_roughness[i1] is not None:
-                    vf_1[i1][-1] = dot_wl(front_roughness[i1], vf_1[i1][-1]) # roughness scatter
+                # traverse downwards through all the bulks
+                for i1 in range(max(1,n_bulks)):
+                    if front_roughness[i1] is not None:
+                        vf_1[i1][-1] = dot_wl(front_roughness[i1], vf_1[i1][-1]) # roughness scatter
 
-                vb_1[i1].append(dot_wl(D[i1], vf_1[i1][-1]))  # pass through bulk, downwards
-                A[i1].append(np.sum(vf_1[i1][-1], 1) - np.sum(vb_1[i1][-1], 1))
+                    vb_1[i1].append(dot_wl(D[i1], vf_1[i1][-1]))  # pass through bulk, downwards
+                    A[i1].append(np.sum(vf_1[i1][-1], 1) - np.sum(vb_1[i1][-1], 1))
 
-                vb_2[i1].append(dot_wl(Rf[i1 + 1], vb_1[i1][-1]))  # reflect from back surface
+                    vb_2[i1].append(dot_wl(Rf[i1 + 1], vb_1[i1][-1]))  # reflect from back surface
+                    a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
 
-                if rear_roughness[i1] is not None:
-                    vb_2[i1][-1] = dot_wl(rear_roughness[i1], vb_2[i1][-1]) # roughness scatter
+                    vt[i1].append(
+                            dot_wl(Tf[i1 + 1], vb_1[i1][-1])
+                    )  # transmitted into medium below through back surface
+                    
+                    if i1 < n_bulks-1:
+                        vf_1_ = dot_wl_u2d(down2up, vt[i1][-1]) # outgoing to incoming
+                        if i2 == 1: # first pass                           
+                            vf_1[i1+1].append(vf_1_)
+                        else: # if subsequent pass, then add to the ones reflected downwards
+                            vf_1[i1+1][-1] += vf_1_
 
-                vf_2[i1].append(dot_wl(D[i1], vb_2[i1][-1]))  # pass through bulk, upwards
+                # traverse upwards through all the bulks
+                for i1 in range(max(1, n_bulks) - 1, -1, -1):
+                    if rear_roughness[i1] is not None:
+                        vb_2[i1][-1] = dot_wl(rear_roughness[i1], vb_2[i1][-1]) # roughness scatter
 
-                # vf_2[i1] = dot_wl_u2d(up2down, vf_2[i1])  # prepare for rear incidence
-                vf_1[i1].append(dot_wl(Rb[i1], vf_2[i1][-1]))  # reflect from front surface
+                    vf_2[i1].append(dot_wl(D[i1], vb_2[i1][-1]))  # pass through bulk, upwards
+                    A[i1].append(np.sum(vb_2[i1][-1], 1) - np.sum(vf_2[i1][-1], 1))
 
-                A[i1].append(np.sum(vb_2[i1][-1], 1) - np.sum(vf_2[i1][-1], 1))
-                power = np.sum(vf_1[i1][-1], axis=1)
-                logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+                    vf_1[i1].append(dot_wl(Rb[i1], vf_2[i1][-1]))  # reflect from front surface
 
-                vr[i1].append(
-                        dot_wl(Tb[i1], vf_2[i1][-1])
-                )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
-                vt[i1].append(
-                        dot_wl(Tf[i1 + 1], vb_1[i1][-1])
-                )  # transmitted into medium below through back surface
+                    a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
 
-                a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
-                a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
-                vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
+                    power = np.sum(vf_1[i1][-1], axis=1)
+                    logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+
+                    vr[i1].append(
+                            dot_wl(Tb[i1], vf_2[i1][-1])
+                    )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
+                    vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
+
+                    if i1 > 0:
+                        vb_2[i1-1][-1] += vr[i1][-1]  # the amount transmitted back up is added to the upper bulk's bottom reflection
 
                 i2 += 1
 
@@ -852,16 +866,16 @@ def matrix_multiplication(
                 # print(bulk_thick[0]) # in m
                 # z = np.arange(0, bulk_thick[0], 1e-6)
                 # print(z)
-                alphas = bulk_mats[0].alpha(options["wavelength"])
 
-                # wavelength, angles
-                absorbed_fraction = 1 - np.exp(-alphas[:,None] * bulk_thick[0] / abscos[None, :])
-
-                # print(absorbed_fraction.shape)
-                # print(total_vf_1[0].shape)
-
-                bulk_absorbed_front = total_vf_1[0]*absorbed_fraction
-                bulk_absorbed_rear = total_vb_2[0]*absorbed_fraction
+                alphas = []
+                bulk_absorbed_front = []
+                bulk_absorbed_rear = []
+                for i in range(len(bulk_mats)):
+                    alphas.append(bulk_mats[i].alpha(options["wavelength"]))
+                    # wavelength, angles
+                    absorbed_fraction = 1 - np.exp(-alphas[-1][:,None] * bulk_thick[i] / abscos[None, :])
+                    bulk_absorbed_front.append(total_vf_1[i]*absorbed_fraction)
+                    bulk_absorbed_rear.append(total_vb_2[i]*absorbed_fraction)
 
                 # # wavelength, angles, z
                 # absorption_profile = np.exp(-alphas[:,None,None] * z[None,None,:] / abscos[None, :, None])
@@ -872,7 +886,6 @@ def matrix_multiplication(
                 # # has the property that summing over z entries result in absorbed
                 # absorption_profile = np.sum(absorption_profile, axis=1)
                 # print(absorption_profile.shape)
-
 
                 grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'Aprof':Aprof, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles, 'bulk_absorbed_front': bulk_absorbed_front, 'bulk_absorbed_rear': bulk_absorbed_rear, 'alphas':alphas, 'abscos': abscos})
 

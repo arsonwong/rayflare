@@ -64,10 +64,10 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     layer = Layer(thickness*1e-9, mat)
     return layer
 
-def bulk_profile(results, z_front):
-    bulk_absorbed_front = results[0]['bulk_absorbed_front']
-    bulk_absorbed_rear = results[0]['bulk_absorbed_rear']
-    alphas = results[0]['alphas']
+def bulk_profile(results, z_front, which_bulk=0):
+    bulk_absorbed_front = results[0]['bulk_absorbed_front'][which_bulk]
+    bulk_absorbed_rear = results[0]['bulk_absorbed_rear'][which_bulk]
+    alphas = results[0]['alphas'][which_bulk]
     abscos = results[0]['abscos']
 
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
@@ -94,14 +94,14 @@ def bulk_profile(results, z_front):
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
-def layer_profile(results, z_front):
+def layer_profile(results, z_front, which_layer, which_stack=0):
     results_per_pass = results[0]['results_per_pass']
-    results_pero = np.sum(results_per_pass["a"][0], 0)[:, [5]]
+    results_pero = np.sum(results_per_pass["a"][which_stack], 0)[:, [which_layer]]
     overall_A = results_pero[:,0] # just flatten
 
     Aprof = results[0]['Aprof']
-    Aprof_front = Aprof[5][0] #layer1,side1
-    Aprof_rear = Aprof[5][1] # backside 
+    Aprof_front = Aprof[which_layer][0] # layer1,side1
+    Aprof_rear = Aprof[which_layer][1] # backside 
     front_local_angles = results[0]['front_local_angles']
     rear_local_angles = results[0]['rear_local_angles']
 
