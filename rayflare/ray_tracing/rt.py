@@ -258,12 +258,8 @@ def RT(
                 for i1 in range(len(wavelengths))
             )
         else:
-            if side == 1:
-                n0 = nks[0]
-                n1 = nks[1]
-            else:
-                n0 = nks[1]
-                n1 = nks[0]
+            n0 = nks[0]
+            n1 = nks[1]
 
             # looking up tables this way is way faster, by 10 times
             radian_table = lookuptable.coords['angle'].data
@@ -349,7 +345,6 @@ def RT(
                     else:
                         allres.append([out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat])
             else:
-
                 # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
                 # multiprocessing not working, for some reason
                 # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s

@@ -259,7 +259,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
 
             if i1 == (len(SC) - 1):
                 substrate = SC.transmission
-                which_sides = ["front"]
+                which_sides = ["front", "rear"]
+                # which_sides = ["front"]
             else:
                 if isinstance(SC[i1 + 1], Roughness):
                     substrate = SC[i1 + 2].material  # bulk material below

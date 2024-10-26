@@ -235,8 +235,8 @@ def load_redistribution_matrices(
             local_angle_mats[i1][1] = stored_redistribution_matrices[1][interfaceIndices[i1]][3]
 
         for front_or_rear in range(2):
-            if i1 == n_interfaces-1 and front_or_rear==1:
-                break
+            # if i1 == n_interfaces-1 and front_or_rear==1:
+            #     break
             Rs[i1].append([])
             Ts[i1].append([])
             As[i1].append([])
@@ -323,7 +323,7 @@ def load_redistribution_matrices(
                 Af.append(As[i3][0][index])
                 Pf.append(Ps[i3][0][index])
                 If.append(Is[i3][0][index])
-                if i3 < n_interfaces-1:
+                if True: #i3 < n_interfaces-1:
                     Rb.append(Rs[i3][1][index])
                     Tb.append(Ts[i3][1][index])
                     Ab.append(As[i3][1][index])
@@ -402,7 +402,7 @@ def matrix_multiplication(
         options["phi_symmetry"],
         theta_spacing,
     )
-    # v0[:] = 1.0 #1/float(v0.shape[1])
+    v0[:] = 1/float(v0.shape[1])
     # print(v0)
     # assert(1==0)
 
@@ -465,10 +465,10 @@ def matrix_multiplication(
         vt = [[] for _ in range(max(1,n_bulks))]
         A = [[] for _ in range(max(1,n_bulks))]
 
-        vf_1 = [[] for _ in range(n_interfaces)]
-        vb_1 = [[] for _ in range(n_interfaces)]
-        vf_2 = [[] for _ in range(n_interfaces)]
-        vb_2 = [[] for _ in range(n_interfaces)]
+        vf_1 = [[] for _ in range(max(1,n_bulks))]
+        vb_1 = [[] for _ in range(max(1,n_bulks))]
+        vf_2 = [[] for _ in range(max(1,n_bulks))]
+        vb_2 = [[] for _ in range(max(1,n_bulks))]
 
         if False: #np.any(len_calcs > 0) or options.bulk_profile:
             # need to calculate profiles in either the bulk or the interfaces
@@ -619,76 +619,142 @@ def matrix_multiplication(
         else:  # no profile calculation in bulk or interface
             i1 = 0
 
-            vf_1[0] = [dot_wl(Tf[0], v0)]  # pass through front surface
-            Tfirst = xr.DataArray(
-                np.array(np.sum(vf_1[0][0], axis=1)),
-                name="Tfirst",
-            )
-                            
-            vr[i1].append(dot_wl(Rf[i1], v0))  # reflected from front surface
-            a[i1].append(
-                dot_wl(Af[i1], v0)
-            )  # absorbed in front surface at first interaction
-            power = np.sum(vf_1[i1], axis=1)
+            incident_side = 1
+            if "incident_side" in options:
+                incident_side = options["incident_side"]
+            
+            if incident_side==-1:
+                vb_2[-1] = [dot_wl(Tb[-1], v0)]  # pass through rear surface
+                Tfirst = xr.DataArray(
+                    np.array(np.sum(vb_2[-1][0], axis=1)),
+                    name="Tfirst",
+                )
+                                
+                vr[-1].append(dot_wl(Rb[-1], v0))  # reflected from front surface
+                a[-1].append(
+                    dot_wl(Ab[-1], v0)
+                )  # absorbed in front surface at first interaction
+                power = np.sum(vb_2[-1][0], axis=1)
 
-            vb_2[i1] = []
+                vf_1[-1] = []
+                vb_2[-1][-1] = dot_wl_u2d(down2up, vb_2[-1][-1])  # outgoing to incoming
+            else:
+                vf_1[0] = [dot_wl(Tf[0], v0)]  # pass through front surface
+                Tfirst = xr.DataArray(
+                    np.array(np.sum(vf_1[0][0], axis=1)),
+                    name="Tfirst",
+                )
+                                
+                vr[0].append(dot_wl(Rf[0], v0))  # reflected from front surface
+                a[0].append(
+                    dot_wl(Af[0], v0)
+                )  # absorbed in front surface at first interaction
+                power = np.sum(vf_1[0][0], axis=1)
 
-            # vf_1[i1] = dot_wl_u2d(up2down, vf_1[i1])
+                vb_2[0] = []
+                vf_1[0][-1] = dot_wl_u2d(down2up, vf_1[0][-1])  # outgoing to incoming
 
             # rep
             i2 = 1
-
-            vf_1[0][-1] = dot_wl_u2d(down2up, vf_1[0][-1])  # outgoing to incoming
 
             if n_bulks==0:
                 break
 
             while np.any(power > options["I_thresh"]):
-                # traverse downwards through all the bulks
-                for i1 in range(max(1,n_bulks)):
-                    if front_roughness[i1] is not None:
-                        vf_1[i1][-1] = dot_wl(front_roughness[i1], vf_1[i1][-1]) # roughness scatter
+                if incident_side==-1:
+                    # traverse upwards through all the bulks
+                    for i1 in range(max(1, n_bulks) - 1, -1, -1):
+                        if rear_roughness[i1] is not None:
+                            vb_2[i1][-1] = dot_wl(rear_roughness[i1], vb_2[i1][-1]) # roughness scatter
 
-                    vb_1[i1].append(dot_wl(D[i1], vf_1[i1][-1]))  # pass through bulk, downwards
-                    A[i1].append(np.sum(vf_1[i1][-1], 1) - np.sum(vb_1[i1][-1], 1))
+                        vf_2[i1].append(dot_wl(D[i1], vb_2[i1][-1]))  # pass through bulk, upwards
+                        A[i1].append(np.sum(vb_2[i1][-1], 1) - np.sum(vf_2[i1][-1], 1))
 
-                    vb_2[i1].append(dot_wl(Rf[i1 + 1], vb_1[i1][-1]))  # reflect from back surface
-                    a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
+                        vf_1[i1].append(dot_wl(Rb[i1], vf_2[i1][-1]))  # reflect from front surface
 
-                    vt[i1].append(
+                        a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
+
+                        vr[i1].append(
+                                dot_wl(Tb[i1], vf_2[i1][-1])
+                        )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
+                        vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
+
+                        if i1 > 0:
+                            if i2 == 1: # first pass                           
+                                vb_2[i1-1].append(vr[i1][-1])
+                            else: # if subsequent pass, then add to the ones reflected upwards
+                                vb_2[i1-1][-1] += vr[i1][-1]
+
+                    # traverse downwards through all the bulks
+                    for i1 in range(max(1,n_bulks)):
+                        if front_roughness[i1] is not None:
+                            vf_1[i1][-1] = dot_wl(front_roughness[i1], vf_1[i1][-1]) # roughness scatter
+
+                        vb_1[i1].append(dot_wl(D[i1], vf_1[i1][-1]))  # pass through bulk, downwards
+                        A[i1].append(np.sum(vf_1[i1][-1], 1) - np.sum(vb_1[i1][-1], 1))
+
+                        vb_2[i1].append(dot_wl(Rf[i1 + 1], vb_1[i1][-1]))  # reflect from back surface
+                        a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
+
+                        vt[i1].append(
                             dot_wl(Tf[i1 + 1], vb_1[i1][-1])
-                    )  # transmitted into medium below through back surface
+                        )  # transmitted into medium below through back surface
+                        
+                        if i1 < n_bulks-1:
+                            vf_1[i1+1][-1] += dot_wl_u2d(down2up, vt[i1][-1]) # outgoing to incoming
                     
-                    if i1 < n_bulks-1:
-                        vf_1_ = dot_wl_u2d(down2up, vt[i1][-1]) # outgoing to incoming
-                        if i2 == 1: # first pass                           
-                            vf_1[i1+1].append(vf_1_)
-                        else: # if subsequent pass, then add to the ones reflected downwards
-                            vf_1[i1+1][-1] += vf_1_
+                    power[:] = 0.0
+                    for i1 in range(max(1,n_bulks)):
+                        power += np.sum(vb_2[i1][-1], axis=1)
 
-                # traverse upwards through all the bulks
-                for i1 in range(max(1, n_bulks) - 1, -1, -1):
-                    if rear_roughness[i1] is not None:
-                        vb_2[i1][-1] = dot_wl(rear_roughness[i1], vb_2[i1][-1]) # roughness scatter
+                else:
 
-                    vf_2[i1].append(dot_wl(D[i1], vb_2[i1][-1]))  # pass through bulk, upwards
-                    A[i1].append(np.sum(vb_2[i1][-1], 1) - np.sum(vf_2[i1][-1], 1))
+                    # traverse downwards through all the bulks
+                    for i1 in range(max(1,n_bulks)):
+                        if front_roughness[i1] is not None:
+                            vf_1[i1][-1] = dot_wl(front_roughness[i1], vf_1[i1][-1]) # roughness scatter
 
-                    vf_1[i1].append(dot_wl(Rb[i1], vf_2[i1][-1]))  # reflect from front surface
+                        vb_1[i1].append(dot_wl(D[i1], vf_1[i1][-1]))  # pass through bulk, downwards
+                        A[i1].append(np.sum(vf_1[i1][-1], 1) - np.sum(vb_1[i1][-1], 1))
 
-                    a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
+                        vb_2[i1].append(dot_wl(Rf[i1 + 1], vb_1[i1][-1]))  # reflect from back surface
+                        a[i1 + 1].append(dot_wl(Af[i1 + 1], vb_1[i1][-1]))  # absorbed in 2nd surface
 
-                    power = np.sum(vf_1[i1][-1], axis=1)
-                    logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+                        vt[i1].append(
+                            dot_wl(Tf[i1 + 1], vb_1[i1][-1])
+                        )  # transmitted into medium below through back surface
+                        
+                        if i1 < n_bulks-1:
+                            vf_1_ = dot_wl_u2d(down2up, vt[i1][-1]) # outgoing to incoming
+                            if i2 == 1: # first pass                           
+                                vf_1[i1+1].append(vf_1_)
+                            else: # if subsequent pass, then add to the ones reflected downwards
+                                vf_1[i1+1][-1] += vf_1_
 
-                    vr[i1].append(
-                            dot_wl(Tb[i1], vf_2[i1][-1])
-                    )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
-                    vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
+                    # traverse upwards through all the bulks
+                    for i1 in range(max(1, n_bulks) - 1, -1, -1):
+                        if rear_roughness[i1] is not None:
+                            vb_2[i1][-1] = dot_wl(rear_roughness[i1], vb_2[i1][-1]) # roughness scatter
 
-                    if i1 > 0:
-                        vb_2[i1-1][-1] += vr[i1][-1]  # the amount transmitted back up is added to the upper bulk's bottom reflection
+                        vf_2[i1].append(dot_wl(D[i1], vb_2[i1][-1]))  # pass through bulk, upwards
+                        A[i1].append(np.sum(vb_2[i1][-1], 1) - np.sum(vf_2[i1][-1], 1))
 
+                        vf_1[i1].append(dot_wl(Rb[i1], vf_2[i1][-1]))  # reflect from front surface
+
+                        a[i1].append(dot_wl(Ab[i1], vf_2[i1][-1]))  # absorbed in 1st surface (from the back)
+
+                        vr[i1].append(
+                                dot_wl(Tb[i1], vf_2[i1][-1])
+                        )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
+                        vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
+
+                        if i1 > 0:
+                            vb_2[i1-1][-1] += vr[i1][-1]  # the amount transmitted back up is added to the upper bulk's bottom reflection
+
+                    power[:] = 0.0
+                    for i1 in range(max(1,n_bulks)):
+                        power += np.sum(vf_1[i1][-1], axis=1)
+                logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
                 i2 += 1
 
         vr = [np.array(item) for item in vr]

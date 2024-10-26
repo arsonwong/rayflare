@@ -59,6 +59,8 @@ def create_new_material(name, n_file_path, k_file_path=None):
         mat.load_nk_data()
     return mat
 
+Glass = create_new_material('Glass',r'C:\Users\arson\Documents\rayflare_fork\temp\glass.txt')
+
 def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     mat = create_new_material(name, n_file_path, k_file_path)
     layer = Layer(thickness*1e-9, mat)
@@ -255,10 +257,20 @@ def set_bulk_thickness(thickness):
 
 def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si, active_layer_index, out_path=None):
     t1 = time.time()
-    global output_file, options
+    global output_file, options, Glass
     options['output_file'] = output_file
     output_file.write("0:Rayflare Server: Setting up the layers\n")
     output_file.flush()  # Ensure the line is written to the file immediately
+
+    top_glass_surf = Interface(
+        "TMM",
+        texture=planar_surface(),
+        layers=[],
+        name="Perovskite_aSi_widthcorr",
+        coherent=True
+    )
+    bulk_glass = BulkLayer(1e-3, Glass, name="glass")
+
     method = "RT_analytical_TMM"
     if surf[0].N.shape[0]==2: #planar
         method = "TMM"
@@ -275,7 +287,11 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
         method = "TMM"
     back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
 
-    list_ = [front_surf]
+    silicon_bulk_index = 0
+    # list_ = [top_glass_surf]
+    # list_.append(bulk_glass)
+    list_ = []
+    list_.append(front_surf)
     if front_roughness is not None:
         list_.append(front_roughness)
     list_.append(bulk_Si)
@@ -300,20 +316,20 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     RAT = results[0]['RAT']
     results_per_pass = results[0]['results_per_pass']
 
-    results_per_layer_back = np.sum(results_per_pass["a"][1], 0)
+    results_per_layer_back = np.sum(results_per_pass["a"][silicon_bulk_index+1], 0)
 
     R_per_pass = np.sum(results_per_pass["r"][0], 2)
     R_0 = R_per_pass[0]
     R_escape = np.sum(R_per_pass[1:, :], 0)
 
     # only select absorbing layers, sum over passes
-    results_per_layer_front = np.sum(results_per_pass["a"][0], 0)[:, [0, 1, 3, 6, 7, 8]]
-    results_pero = np.sum(results_per_pass["a"][0], 0)[:, [active_layer_index-1]]
+    results_per_layer_front = np.sum(results_per_pass["a"][silicon_bulk_index], 0)
+    results_pero = np.sum(results_per_pass["a"][silicon_bulk_index], 0)[:, [active_layer_index-1]]
     A_pero = results_pero[:,0] # just flatten
 
     allres = np.flip(
         np.hstack(
-            (R_0[:, None], R_escape[:, None], results_per_layer_front, results_per_layer_back, RAT["T"].T, results_pero, RAT["A_bulk"].T)
+            (R_0[:, None], R_escape[:, None], results_per_layer_front, results_per_layer_back, RAT["T"].T, RAT["A_bulk"].T)
         ),
         1,
     )
@@ -324,8 +340,8 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
         source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
     ).spectrum(wavelengths)[1]
 
-    A_Si = RAT["A_bulk"][0]
-    Jph_Si = q * np.trapz(RAT["A_bulk"][0] * spectr_flux, wavelengths) / 10  # mA/cm2
+    A_Si = RAT["A_bulk"][silicon_bulk_index]
+    Jph_Si = q * np.trapz(RAT["A_bulk"][silicon_bulk_index] * spectr_flux, wavelengths) / 10  # mA/cm2
     Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
     print("Time: ", time.time()-t1)
@@ -338,22 +354,6 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     ax.stackplot(
         options["wavelength"] * 1e9,
         allres.T,
-        labels=[
-            "c-Si (bulk)",
-            "Perovskite",
-            "Ag",
-            "rear ITO",
-            "aSi-p",
-            "aSi-i",
-            "aSi-i",
-            "aSi-n",
-            "front ITO",
-            "C$_{60}$",
-            "IZO",
-            "MgF$_2$",
-            "R$_{escape}$",
-            "R$_0$",
-        ],
         colors=pal,
     )
 
@@ -366,7 +366,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     ax.set_xlabel("Wavelength (nm)")
     ax.set_ylabel("R/A/T")
     ax.set_xlim(300, 1200)
-    ax.set_ylim(0, 1.0)
+    ax.set_ylim(0, 1.5)
     ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
     ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 
