@@ -710,7 +710,7 @@ def matrix_multiplication(
 
                         vr[i1].append(
                                 dot_wl(Tb[i1], vf_2[i1][-1])
-                        )  # matrix travelling up in medium 0, i.e. reflected overall by being transmitted through front surface
+                        ) 
                         vr[i1][-1] = dot_wl_u2d(down2up, vr[i1][-1])
 
                         if i1 > 0:
@@ -802,8 +802,12 @@ def matrix_multiplication(
 
         front_local_angles = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
 
-        if "Aprof" in TMM_lookup_table[0]:
-            Aprof = TMM_lookup_table[0]['Aprof']
+        active_interface_index = 0
+        if "active_interface_index" in options:
+            active_interface_index = options["active_interface_index"]
+
+        if "Aprof" in TMM_lookup_table[active_interface_index]:
+            Aprof = TMM_lookup_table[active_interface_index]['Aprof']
             if options["pol"] == "u":
                 Aprof = 0.5*(Aprof.loc[dict(pol='s')]+Aprof.loc[dict(pol='p')]).values
             else:

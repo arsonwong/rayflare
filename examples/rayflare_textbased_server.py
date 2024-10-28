@@ -29,6 +29,25 @@ import seaborn as sns
 from cycler import cycler
 
 output_file = None
+wavelengths = np.arange(300,1201,5) * 1e-9
+silicon_bulk_index = 0
+active_interface = 0
+active_interface_index = 0
+options = default_options()
+options.wavelength = wavelengths
+options.only_incidence_angle = False
+# options.lookuptable_angles = 200
+# options.parallel = True
+options.project_name = "perovskite_Si_example"
+options.n_rays = 2000
+options.n_theta_bins = 30 #90
+options.c_azimuth = 0.25 #1.00
+options.nx = 2
+options.ny = 2
+options.depth_spacing = 1e-9
+options.phi_symmetry = np.pi / 2
+options.bulk_profile = False
+options.detailed = True
 
 # can define material by loading nk files made by Griddler, e.g. doped silicon
 # still need to parameterize to silicon
@@ -67,7 +86,9 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     layer = Layer(thickness*1e-9, mat)
     return layer
 
-def bulk_profile(results, z_front, which_bulk=0):
+def bulk_profile(results, z_front):
+    global silicon_bulk_index
+    which_bulk = silicon_bulk_index
     bulk_absorbed_front = results[0]['bulk_absorbed_front'][which_bulk]
     bulk_absorbed_rear = results[0]['bulk_absorbed_rear'][which_bulk]
     alphas = results[0]['alphas'][which_bulk]
@@ -97,7 +118,9 @@ def bulk_profile(results, z_front, which_bulk=0):
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
-def layer_profile(results, z_front, which_layer, which_stack=0):
+def layer_profile(results, z_front, which_layer):
+    global active_interface
+    which_stack = active_interface
     results_per_pass = results[0]['results_per_pass']
     results_pero = np.sum(results_per_pass["a"][which_stack], 0)[:, [which_layer]]
     overall_A = results_pero[:,0] # just flatten
@@ -143,119 +166,6 @@ def layer_profile(results, z_front, which_layer, which_stack=0):
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
-
-
-
-pal = sns.cubehelix_palette()
-
-cols = cycler("color", pal)
-
-params = {
-    "legend.fontsize": "small",
-    "axes.labelsize": "small",
-    "axes.titlesize": "small",
-    "xtick.labelsize": "small",
-    "ytick.labelsize": "small",
-    "axes.prop_cycle": cols,
-}
-
-plt.rcParams.update(params)
-
-cur_path = os.path.dirname(os.path.abspath(__file__))
-# new materials from data (only need to add once, uncomment following lines to do so:
-
-# from solcore.material_system import create_new_material
-# # create_new_material('Perovskite_CsBr_1p6eV', os.path.join(cur_path, 'data/CsBr10p_1to2_n_shifted.txt'), os.path.join(cur_path, 'data/CsBr10p_1to2_k_shifted.txt'))
-# create_new_material('Perovskite_CsBr_1p6eV', os.path.join(cur_path, 'data/CsBr10p_1to2_n_shifted.txt'), os.path.join(cur_path, 'data/CsBr10p_1to2_k_shifted_mod.txt'))
-
-# create_new_material('front_ITO', os.path.join(cur_path, 'data/model_med_back_ito_n.txt'), os.path.join(cur_path, 'data/model_med_back_ito_k.txt'))
-# create_new_material('ITO_lowdoping', os.path.join(cur_path, 'data/model_heavy_back_ito_n.txt'), os.path.join(cur_path, 'data/model_heavy_back_ito_k.txt'))
-# # create_new_material('Ag_Jiang', os.path.join(cur_path, 'data/Ag_UNSW_n.txt'), os.path.join(cur_path, 'data/Ag_UNSW_k.txt'))
-# # create_new_material('aSi_i', os.path.join(cur_path, 'data/model_i_a_silicon_n.txt'),os.path.join(cur_path, 'data/model_i_a_silicon_k.txt'))
-# # create_new_material('aSi_p', os.path.join(cur_path, 'data/model_p_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_p_a_silicon_k.txt'))
-# # create_new_material('aSi_n', os.path.join(cur_path, 'data/model_n_a_silicon_n.txt'), os.path.join(cur_path, 'data/model_n_a_silicon_k.txt'))
-# # create_new_material('MgF2_RdeM', os.path.join(cur_path, 'data/MgF2_RdeM_n.txt'), os.path.join(cur_path, 'data/MgF2_RdeM_k.txt'))
-# # create_new_material('C60', os.path.join(cur_path, 'data/C60_Ren_n.txt'), os.path.join(cur_path, 'data/C60_Ren_k.txt'))
-# # create_new_material('IZO', os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_n.txt'), os.path.join(cur_path, 'data/IZO_Ballif_rO2_10pcnt_k.txt'))
-
-
-# matrix multiplication
-wavelengths = np.arange(300,1201,5) * 1e-9
-# wavelengths = np.linspace(300,1200,50) * 1e-9
-
-options = default_options()
-options.wavelength = wavelengths
-options.only_incidence_angle = False
-# options.lookuptable_angles = 200
-# options.parallel = True
-options.project_name = "perovskite_Si_example"
-options.n_rays = 2000
-options.n_theta_bins = 30 #90
-options.c_azimuth = 0.25 #1.00
-options.nx = 2
-options.ny = 2
-options.depth_spacing = 1e-9
-options.phi_symmetry = np.pi / 2
-options.bulk_profile = False
-options.detailed = True
-
-Si = material("Si")()
-Air = material("Air")()
-MgF2 = material("MgF2_RdeM")()
-ITO_back = material("ITO_lowdoping")()
-ITO_front = material("front_ITO")()
-Perovskite = material("Perovskite_CsBr_1p6eV")()
-Ag = material("Ag_Jiang")()
-aSi_i = material("aSi_i")()
-aSi_p = material("aSi_p")()
-aSi_n = material("aSi_n")()
-LiF = material("LiF")()
-IZO = material("IZO")()
-C60 = material("C60")()
-
-# materials with constant n, zero k. Layer width is in nm.
-Spiro = [12, np.array([0, 1]), np.array([1.65, 1.65]), np.array([0, 0])]
-SnO2 = [10, np.array([0, 1]), np.array([2, 2]), np.array([0, 0])]
-
-# stack based on doi:10.1038/s41563-018-0115-4
-# alter C60 layer to 1e-9 instead of 15e-9
-front_materials = [
-    Layer(160e-9, MgF2),
-    Layer(80e-9, IZO),
-    SnO2,
-    Layer(5e-9, C60), 
-    Layer(1e-9, LiF),
-    Layer(500e-9, Perovskite),
-    Layer(250e-9, ITO_front),
-    Layer(6.5e-9, aSi_n),
-    Layer(6.5e-9, aSi_i),
-]
-
-back_materials = [Layer(6.5e-9, aSi_i), Layer(6.5e-9, aSi_p), Layer(250e-9, ITO_back)]
-
-def set_front_materials_thicknesses(thicknesses):
-    SnO2 = [thicknesses[2], np.array([0, 1]), np.array([2, 2]), np.array([0, 0])]
-    front_materials = [
-        Layer(thicknesses[0]*1e-9, MgF2),
-        Layer(thicknesses[1]*1e-9, IZO),
-        SnO2,
-        Layer(thicknesses[3]*1e-9, C60), 
-        Layer(thicknesses[4]*1e-9, LiF),
-        Layer(thicknesses[5]*1e-9, Perovskite),
-        Layer(thicknesses[6]*1e-9, ITO_front),
-        Layer(thicknesses[7]*1e-9, aSi_n),
-        Layer(thicknesses[8]*1e-9, aSi_i),
-    ]
-    return front_materials
-
-def set_back_materials_thicknesses(thicknesses):
-    back_materials = [Layer(thicknesses[0]*1e-9, aSi_i), Layer(thicknesses[1]*1e-9, aSi_p), Layer(thicknesses[2]*1e-9, ITO_back)]
-    return back_materials
-
-def set_bulk_thickness(thickness):
-    bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
-    return bulk_Si
-
 def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, 
                    cell_bulk, active_layer_index, top_cover_bulk, top_cover_front_materials, top_cover_rear_materials, 
                    bottom_cover_bulk, bottom_cover_front_materials, bottom_cover_rear_materials, 
@@ -263,7 +173,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                    enable_front_incidence, front_angular_distribution, enable_rear_incidence, rear_angular_distribution,
                    front_out_path=None, rear_out_path=None):
     t1 = time.time()
-    global output_file, options, Glass
+    global output_file, options, Glass, active_interface, silicon_bulk_index, active_interface_index
     options['output_file'] = output_file
     output_file.write("0:Rayflare Server: Setting up the layers\n")
     output_file.flush()  # Ensure the line is written to the file immediately
@@ -307,29 +217,30 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     method = "RT_analytical_TMM"
     if surf[0].N.shape[0]==2: #planar
         method = "TMM"
-    front_surf = Interface(
-    method,
-    texture=surf,
-    layers=front_materials,
-    name="Perovskite_aSi_widthcorr",
-    coherent=True,
-    prof_layers=[active_layer_index] #hopefully with 1-indexed, that is pero
-    )
+    front_surf = Interface(method,texture=surf,layers=front_materials,name="Perovskite_aSi_widthcorr",coherent=True,prof_layers=active_layer_index) #hopefully with 1-indexed, that is pero)
     method = "RT_analytical_TMM"
     if surf_back[0].N.shape[0]==2: #planar
         method = "TMM"
     back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
 
     silicon_bulk_index = 0
+    active_interface = 0
+    active_interface_index = 0
     list_ = []
     if top_cover_bulk is not None:
         silicon_bulk_index = 1
         list_.append(top_cover_front_surf)
+        active_interface += 1 
+        active_interface_index += 1
         list_.append(top_cover_bulk)
+        active_interface_index += 1
         if len(top_cover_rear_materials)>0:
             silicon_bulk_index += 1
             list_.append(top_cover_rear_surf)
+            active_interface += 1 
+            active_interface_index += 1
             list_.append(top_cover_spacer)
+            active_interface_index += 1
         
     list_.append(front_surf)
     if front_roughness is not None:
@@ -359,10 +270,11 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     output_file.write("0:Rayflare Server: Processing the structure\n")
     output_file.flush()  # Ensure the line is written to the file immediately
 
+    options["active_interface_index"] = active_interface_index
+
     process_structure(SC, options, overwrite=True)
 
     enable_ = [enable_front_incidence, enable_rear_incidence]
-    print(enable_)
     side_ = [1, -1]
     front_results = []
     rear_results = []
@@ -379,7 +291,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             output_file.flush()  # Ensure the line is written to the file immediately
 
             results = calculate_RAT(SC, options)
-            if i12==1:
+            if i12==0:
                 front_results = deepcopy(results)
             else:
                 rear_results = deepcopy(results)
@@ -390,67 +302,80 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             RAT = results[0]['RAT']
             results_per_pass = results[0]['results_per_pass']
 
-            results_per_layer_back = np.sum(results_per_pass["a"][silicon_bulk_index+1], 0)
+            # results_per_layer_back = np.sum(results_per_pass["a"][silicon_bulk_index+1], 0)
 
-            R_per_pass = np.sum(results_per_pass["r"][0], 2)
-            R_0 = R_per_pass[0]
-            R_escape = np.sum(R_per_pass[1:, :], 0)
+            # R_per_pass = np.sum(results_per_pass["r"][0], 2)
+            # R_0 = R_per_pass[0]
+            # R_escape = np.sum(R_per_pass[1:, :], 0)
 
-            # only select absorbing layers, sum over passes
-            results_per_layer_front = np.sum(results_per_pass["a"][silicon_bulk_index], 0)
-            results_pero = np.sum(results_per_pass["a"][silicon_bulk_index], 0)[:, [active_layer_index-1]]
-            A_pero = results_pero[:,0] # just flatten
+            # # only select absorbing layers, sum over passes
+            # results_per_layer_front = np.sum(results_per_pass["a"][silicon_bulk_index], 0)
+            output = [wavelengths*1e9]
+            columns = ['Wavelength(nm)','Cover transmittance']
+            if i12==0:
+                t = results_per_pass["t"][0][0,:,:]
+            else:
+                t = results_per_pass["r"][-1][0,:,:]
+            t = np.sum(t,axis=1)
+            output.append(t)
+            for i in active_layer_index:
+                results_A_ = np.sum(results_per_pass["a"][silicon_bulk_index], 0)[:, [i-1]]
+                A_ = results_A_[:,0] # just flatten
+                output.append(A_)
+                columns.append('A'+str(i))
 
-            T_last = RAT["T"].values[-1,:]
-            cell_A = RAT["A_bulk"].values[silicon_bulk_index,:]
+            # T_last = RAT["T"].values[-1,:]
+            # cell_A = RAT["A_bulk"].values[silicon_bulk_index,:]
 
-            print(R_0.shape)
-            print(T_last.shape)
+            # print(R_0.shape)
+            # print(T_last.shape)
 
-            allres = np.flip(
-                np.hstack(
-                    (R_0[:, None], R_escape[:, None], T_last[:, None], results_per_layer_front, results_per_layer_back, cell_A[:, None])
-                ),
-                1,
-            )
+            # allres = np.flip(
+            #     np.hstack(
+            #         (R_0[:, None], R_escape[:, None], T_last[:, None], results_per_layer_front, results_per_layer_back, cell_A[:, None])
+            #     ),
+            #     1,
+            # )
 
-            # calculated photogenerated current (Jsc with 100% EQE)
+            # # calculated photogenerated current (Jsc with 100% EQE)
 
-            spectr_flux = LightSource(
-                source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
-            ).spectrum(wavelengths)[1]
+            # spectr_flux = LightSource(
+            #     source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
+            # ).spectrum(wavelengths)[1]
 
             A_Si = RAT["A_bulk"][silicon_bulk_index]
-            Jph_Si = q * np.trapz(RAT["A_bulk"][silicon_bulk_index] * spectr_flux, wavelengths) / 10  # mA/cm2
-            Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
+            output.append(A_Si)
+            columns.append('A_substrate')
+            # Jph_Si = q * np.trapz(RAT["A_bulk"][silicon_bulk_index] * spectr_flux, wavelengths) / 10  # mA/cm2
+            # Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
-            print("Time: ", time.time()-t1)
+            # print("Time: ", time.time()-t1)
 
-            pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
+            # pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
 
-            # plot total R, A, T
-            fig = plt.figure(figsize=(5, 4))
-            ax = plt.subplot(111)
-            ax.stackplot(
-                options["wavelength"] * 1e9,
-                allres.T,
-                colors=pal,
-            )
+            # # plot total R, A, T
+            # fig = plt.figure(figsize=(5, 4))
+            # ax = plt.subplot(111)
+            # ax.stackplot(
+            #     options["wavelength"] * 1e9,
+            #     allres.T,
+            #     colors=pal,
+            # )
 
-            min_wl = np.ceil(np.min(wavelengths*1e9))
-            max_wl = np.floor(np.max(wavelengths*1e9))
-            min_wl = min_wl.astype(int)
-            max_wl = max_wl.astype(int)
+            # min_wl = np.ceil(np.min(wavelengths*1e9))
+            # max_wl = np.floor(np.max(wavelengths*1e9))
+            # min_wl = min_wl.astype(int)
+            # max_wl = max_wl.astype(int)
 
-            lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
-            ax.set_xlabel("Wavelength (nm)")
-            ax.set_ylabel("R/A/T")
-            ax.set_xlim(300, 1200)
-            ax.set_ylim(0, 1.5)
-            ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
-            ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
+            # lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
+            # ax.set_xlabel("Wavelength (nm)")
+            # ax.set_ylabel("R/A/T")
+            # ax.set_xlim(300, 1200)
+            # ax.set_ylim(0, 1.5)
+            # ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
+            # ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 
-            plt.show()
+            # plt.show()
 
             if i12==0:
                 out_path = front_out_path
@@ -458,8 +383,8 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                 out_path = rear_out_path
 
             if out_path is not None:
-                output = np.array([wavelengths*1e9, A_pero, A_Si]).T
-                df = pd.DataFrame(output, columns=['Wavelength(nm)', 'A_pero', 'A_Si'])
+                output = np.array(output).T
+                df = pd.DataFrame(output, columns=columns)
                 df.to_csv(out_path, index=False)        
 
     return front_results, rear_results
