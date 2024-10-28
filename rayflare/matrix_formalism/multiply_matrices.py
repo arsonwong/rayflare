@@ -402,9 +402,43 @@ def matrix_multiplication(
         options["phi_symmetry"],
         theta_spacing,
     )
-    v0[:] = 1/float(v0.shape[1])
-    # print(v0)
-    # assert(1==0)
+    if "incidence_angular_distribution" in options:
+        angular_distribution = options["incidence_angular_distribution"]
+        if (angular_distribution[0][0]==1 and angular_distribution[0][3]==0) or (angular_distribution[1][0]==1 and angular_distribution[1][3]==0):
+            if angular_distribution[0][0]==1:
+                theta_in = angular_distribution[0][1]*np.pi/180
+                phi_in = angular_distribution[0][2]*np.pi/180
+            else:
+                theta_in = angular_distribution[1][1]*np.pi/180
+                phi_in = angular_distribution[1][2]*np.pi/180
+            v0 = make_v0(
+                theta_in,
+                phi_in,
+                num_wl,
+                options["n_theta_bins"],
+                options["c_azimuth"],
+                options["phi_symmetry"],
+                theta_spacing,
+            )
+        else:
+            phis = angle_vector[:n_a_in, 2]
+            v0 = np.zeros((num_wl, n_a_in)) 
+            vectors = np.array([np.cos(thetas), np.sin(thetas)*np.cos(phis), np.sin(thetas)*np.sin(phis)])
+            for i12 in range(2):
+                v0_ = np.ones_like(thetas)
+                char_length = angular_distribution[i12][3]
+                if char_length > 0:
+                    theta_in = angular_distribution[i12][1]*np.pi/180
+                    phi_in = angular_distribution[i12][2]*np.pi/180
+                    vector = np.array([np.cos(theta_in), np.sin(theta_in)*np.cos(phi_in), np.sin(theta_in)*np.sin(phi_in)])
+                    distances = np.sqrt(np.sum((vectors-vector[:,None])**2,axis=0))
+                    v0_ = np.exp(-(distances/char_length)**2)
+                v0_ *= np.cos(thetas)
+                v0_ /= np.sum(v0_)
+                v0_ = [v0_] * num_wl
+                v0_ = np.array(v0_)
+                weight = angular_distribution[i12][0]
+                v0 += v0_*weight    
 
     up2down, down2up = out_to_in_matrix(
         options["phi_symmetry"], angle_vector, theta_intv, phi_intv

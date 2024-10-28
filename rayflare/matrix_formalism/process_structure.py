@@ -269,17 +269,27 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                 which_sides = ["front", "rear"]
 
             if struct.method == "Mirror":
-                mirror_matrix(
-                    angle_vector,
-                    theta_intv,
-                    phi_intv,
-                    struct.name,
-                    options,
-                    structpath,
-                    front_or_rear="front",
-                    save=True,
-                    overwrite=overwrite,
-                )
+                # Generate row and column indices for the identity matrix
+                size_ = angle_vector.shape[0]/2
+                row_indices = np.arange(size_)
+                col_indices = np.arange(size_)
+                data = np.ones(size_)
+                # Create the sparse COO matrix
+                sparse_identity = COO((row_indices, col_indices), data, shape=(size_, size_))
+                allArrays_backscatter = stack([sparse_identity] * options["wavelength"].size, axis=0)
+                stored_front_redistribution_matrices.append([allArrays_backscatter, [], [], []])
+
+                # mirror_matrix(
+                #     angle_vector,
+                #     theta_intv,
+                #     phi_intv,
+                #     struct.name,
+                #     options,
+                #     structpath,
+                #     front_or_rear="front",
+                #     save=True,
+                #     overwrite=overwrite,
+                # )
 
             if struct.method == "Lambertian":
 

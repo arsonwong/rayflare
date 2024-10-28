@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys
 import pandas as pd
+from copy import deepcopy
 sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
 sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
@@ -255,21 +256,53 @@ def set_bulk_thickness(thickness):
     bulk_Si = BulkLayer(thickness*1e-6, Si, name="Si_bulk")  # bulk thickness in m
     return bulk_Si
 
-def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, bulk_Si, active_layer_index, out_path=None):
+def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, back_materials, rear_roughness, surf, surf_back, 
+                   cell_bulk, active_layer_index, top_cover_bulk, top_cover_front_materials, top_cover_rear_materials, 
+                   bottom_cover_bulk, bottom_cover_front_materials, bottom_cover_rear_materials, 
+                   bottom_cover_front_last_layer, bottom_cover_front_last_layer_R, bottom_cover_rear_last_layer, bottom_cover_rear_last_layer_R, 
+                   enable_front_incidence, front_angular_distribution, enable_rear_incidence, rear_angular_distribution,
+                   front_out_path=None, rear_out_path=None):
     t1 = time.time()
     global output_file, options, Glass
     options['output_file'] = output_file
     output_file.write("0:Rayflare Server: Setting up the layers\n")
     output_file.flush()  # Ensure the line is written to the file immediately
 
-    top_glass_surf = Interface(
+    top_cover_front_surf = Interface(
         "TMM",
         texture=planar_surface(),
-        layers=[],
-        name="Perovskite_aSi_widthcorr",
+        layers=top_cover_front_materials,
+        name="glass",
         coherent=True
     )
-    bulk_glass = BulkLayer(1e-3, Glass, name="glass")
+
+    if len(top_cover_rear_materials)>0:
+        top_cover_rear_surf = Interface(
+            "TMM",
+            texture=planar_surface(),
+            layers=top_cover_rear_materials[:-1],
+            name="glass",
+            coherent=True
+        )
+        top_cover_spacer = BulkLayer(top_cover_rear_materials[-1].width, top_cover_rear_materials[-1].material, name="spacer")
+
+    if len(bottom_cover_front_materials)>0:
+        bottom_cover_front_surf = Interface(
+            "TMM",
+            texture=planar_surface(),
+            layers=bottom_cover_front_materials[1:],
+            name="glass",
+            coherent=True
+        )
+        bottom_cover_spacer = BulkLayer(bottom_cover_front_materials[0].width, bottom_cover_front_materials[0].material, name="spacer")
+
+    bottom_cover_rear_surf = Interface(
+        "TMM",
+        texture=planar_surface(),
+        layers=bottom_cover_rear_materials,
+        name="glass",
+        coherent=True
+    )
 
     method = "RT_analytical_TMM"
     if surf[0].N.shape[0]==2: #planar
@@ -288,16 +321,39 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
     back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
 
     silicon_bulk_index = 0
-    # list_ = [top_glass_surf]
-    # list_.append(bulk_glass)
     list_ = []
+    if top_cover_bulk is not None:
+        silicon_bulk_index = 1
+        list_.append(top_cover_front_surf)
+        list_.append(top_cover_bulk)
+        if len(top_cover_rear_materials)>0:
+            silicon_bulk_index += 1
+            list_.append(top_cover_rear_surf)
+            list_.append(top_cover_spacer)
+        
     list_.append(front_surf)
     if front_roughness is not None:
         list_.append(front_roughness)
-    list_.append(bulk_Si)
+    list_.append(cell_bulk)
     if rear_roughness is not None:
         list_.append(rear_roughness)
-    list_.append(back_surf)
+    # if bottom_cover_front_last_layer > 0 or bottom_cover_rear_last_layer > 0:
+    #     if bottom_cover_front_last_layer==1 or (bottom_cover_front_last_layer==0 and bottom_cover_rear_last_layer==1):
+    #         reflector = Interface("Mirror", texture = planar_surface(), layers=[], name="mirror", coherent=True)
+    #     else:
+    #         reflector = Interface("Lambertian", texture = planar_surface(), layers=[], name="mirror", coherent=True)
+    if False: #len(back_materials)==0 and len(bottom_cover_front_materials)==0 and bottom_cover_front_last_layer > 0:
+        pass
+    else:
+        list_.append(back_surf)
+
+        if bottom_cover_bulk is not None:
+            if len(bottom_cover_front_materials)>0:
+                list_.append(bottom_cover_spacer)
+                list_.append(bottom_cover_front_surf)
+            list_.append(bottom_cover_bulk)
+            list_.append(bottom_cover_rear_surf)
+
     SC = Structure(list_, incidence=top_medium, transmission=bottom_medium)
 
     output_file.write("0:Rayflare Server: Processing the structure\n")
@@ -305,79 +361,108 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
 
     process_structure(SC, options, overwrite=True)
 
-    output_file.write("0:Rayflare Server: Tracing the angular distributions\n")
-    output_file.flush()  # Ensure the line is written to the file immediately
+    enable_ = [enable_front_incidence, enable_rear_incidence]
+    print(enable_)
+    side_ = [1, -1]
+    front_results = []
+    rear_results = []
+    for i12 in range(2):
+        if enable_[i12]==1:
+            options["incident_side"] = side_[i12]
+            if i12==0:
+                options["incidence_angular_distribution"] = front_angular_distribution
+                output_file.write("0:Rayflare Server: Simulating front incidence\n")
+            else:
+                options["incidence_angular_distribution"] = rear_angular_distribution
+                output_file.write("0:Rayflare Server: Simulating rear incidence\n")
+            
+            output_file.flush()  # Ensure the line is written to the file immediately
 
-    results = calculate_RAT(SC, options)
+            results = calculate_RAT(SC, options)
+            if i12==1:
+                front_results = deepcopy(results)
+            else:
+                rear_results = deepcopy(results)
 
-    output_file.write("0:Rayflare Server: Post-processing\n")
-    output_file.flush()  # Ensure the line is written to the file immediately
+            output_file.write("0:Rayflare Server: Post-processing\n")
+            output_file.flush()  # Ensure the line is written to the file immediately
 
-    RAT = results[0]['RAT']
-    results_per_pass = results[0]['results_per_pass']
+            RAT = results[0]['RAT']
+            results_per_pass = results[0]['results_per_pass']
 
-    results_per_layer_back = np.sum(results_per_pass["a"][silicon_bulk_index+1], 0)
+            results_per_layer_back = np.sum(results_per_pass["a"][silicon_bulk_index+1], 0)
 
-    R_per_pass = np.sum(results_per_pass["r"][0], 2)
-    R_0 = R_per_pass[0]
-    R_escape = np.sum(R_per_pass[1:, :], 0)
+            R_per_pass = np.sum(results_per_pass["r"][0], 2)
+            R_0 = R_per_pass[0]
+            R_escape = np.sum(R_per_pass[1:, :], 0)
 
-    # only select absorbing layers, sum over passes
-    results_per_layer_front = np.sum(results_per_pass["a"][silicon_bulk_index], 0)
-    results_pero = np.sum(results_per_pass["a"][silicon_bulk_index], 0)[:, [active_layer_index-1]]
-    A_pero = results_pero[:,0] # just flatten
+            # only select absorbing layers, sum over passes
+            results_per_layer_front = np.sum(results_per_pass["a"][silicon_bulk_index], 0)
+            results_pero = np.sum(results_per_pass["a"][silicon_bulk_index], 0)[:, [active_layer_index-1]]
+            A_pero = results_pero[:,0] # just flatten
 
-    allres = np.flip(
-        np.hstack(
-            (R_0[:, None], R_escape[:, None], results_per_layer_front, results_per_layer_back, RAT["T"].T, RAT["A_bulk"].T)
-        ),
-        1,
-    )
+            T_last = RAT["T"].values[-1,:]
+            cell_A = RAT["A_bulk"].values[silicon_bulk_index,:]
 
-    # calculated photogenerated current (Jsc with 100% EQE)
+            print(R_0.shape)
+            print(T_last.shape)
 
-    spectr_flux = LightSource(
-        source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
-    ).spectrum(wavelengths)[1]
+            allres = np.flip(
+                np.hstack(
+                    (R_0[:, None], R_escape[:, None], T_last[:, None], results_per_layer_front, results_per_layer_back, cell_A[:, None])
+                ),
+                1,
+            )
 
-    A_Si = RAT["A_bulk"][silicon_bulk_index]
-    Jph_Si = q * np.trapz(RAT["A_bulk"][silicon_bulk_index] * spectr_flux, wavelengths) / 10  # mA/cm2
-    Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
+            # calculated photogenerated current (Jsc with 100% EQE)
 
-    print("Time: ", time.time()-t1)
+            spectr_flux = LightSource(
+                source_type="standard", version="AM1.5g", x=wavelengths, output_units="photon_flux_per_m", concentration=1
+            ).spectrum(wavelengths)[1]
 
-    pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
+            A_Si = RAT["A_bulk"][silicon_bulk_index]
+            Jph_Si = q * np.trapz(RAT["A_bulk"][silicon_bulk_index] * spectr_flux, wavelengths) / 10  # mA/cm2
+            Jph_Perovskite = q * np.trapz(results_pero[:,0] * spectr_flux, wavelengths) / 10  # mA/cm2
 
-    # plot total R, A, T
-    fig = plt.figure(figsize=(5, 4))
-    ax = plt.subplot(111)
-    ax.stackplot(
-        options["wavelength"] * 1e9,
-        allres.T,
-        colors=pal,
-    )
+            print("Time: ", time.time()-t1)
 
-    min_wl = np.ceil(np.min(wavelengths*1e9))
-    max_wl = np.floor(np.max(wavelengths*1e9))
-    min_wl = min_wl.astype(int)
-    max_wl = max_wl.astype(int)
+            pal = sns.cubehelix_palette(13, start=0.5, rot=-0.7)
 
-    lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
-    ax.set_xlabel("Wavelength (nm)")
-    ax.set_ylabel("R/A/T")
-    ax.set_xlim(300, 1200)
-    ax.set_ylim(0, 1.5)
-    ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
-    ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
+            # plot total R, A, T
+            fig = plt.figure(figsize=(5, 4))
+            ax = plt.subplot(111)
+            ax.stackplot(
+                options["wavelength"] * 1e9,
+                allres.T,
+                colors=pal,
+            )
 
-    plt.show()
+            min_wl = np.ceil(np.min(wavelengths*1e9))
+            max_wl = np.floor(np.max(wavelengths*1e9))
+            min_wl = min_wl.astype(int)
+            max_wl = max_wl.astype(int)
 
-    if out_path is not None:
-        output = np.array([wavelengths*1e9, A_pero, A_Si]).T
-        df = pd.DataFrame(output, columns=['Wavelength(nm)', 'A_pero', 'A_Si'])
-        df.to_csv(out_path, index=False)        
+            lgd = ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
+            ax.set_xlabel("Wavelength (nm)")
+            ax.set_ylabel("R/A/T")
+            ax.set_xlim(300, 1200)
+            ax.set_ylim(0, 1.5)
+            ax.text(530, 0.5, "Perovskite: \n" + str(round(Jph_Perovskite, 1)) + " mA/cm$^2$", ha="center")
+            ax.text(900, 0.5, "Si: \n" + str(round(Jph_Si, 1)) + " mA/cm$^2$", ha="center")
 
-    return results
+            plt.show()
+
+            if i12==0:
+                out_path = front_out_path
+            else:
+                out_path = rear_out_path
+
+            if out_path is not None:
+                output = np.array([wavelengths*1e9, A_pero, A_Si]).T
+                df = pd.DataFrame(output, columns=['Wavelength(nm)', 'A_pero', 'A_Si'])
+                df.to_csv(out_path, index=False)        
+
+    return front_results, rear_results
 
 
 input_file_path = 'logfile.txt'
