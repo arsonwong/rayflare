@@ -330,10 +330,12 @@ def RT_analytical(
     scattered_rays = []
     A_mat = np.zeros((len(wl), n_abs_layers))
 
-    for iter in range(max_interactions):
+    first_iter = 0
+    for iter in range(max_interactions+1):
         num_of_rays = len(ray_queue)
         # print("iter = ", iter, " num of rays = ", num_of_rays)
         if num_of_rays==0:
+            first_iter = iter
             break
         ray_directions = get_ray_directions(ray_queue)
         cos_inc = -np.dot(ray_directions, normals.T) # dot product, resulting in shape (num of rays, num of faces)
@@ -369,13 +371,17 @@ def RT_analytical(
                     hit_prob[index] = hit_prob[index]**2/horizontal_hit_prob
 
         hit_prob = hit_prob / total_hit_prob
-        if iter == max_interactions - 1:
+        if iter == max_interactions:
             hit_prob *= 0
 
         total_hit_prob = np.sum(hit_prob, axis=1)
             
         indices = np.where(total_hit_prob < 0.99999)[0]
         if len(indices) > 0:
+            if iter==0:
+                theta_in
+                phi_in
+                assert(1==0)
             for index in indices:
                 outbound_prob = 1 - total_hit_prob[index]
                 reflected_ray = Ray(direction = np.copy(ray_directions[index]), probability = 1, parent=ray_queue[index].parent, 
@@ -453,7 +459,7 @@ def RT_analytical(
 
     thetas_local_incidence = []
     ray_queue = [first_ray]
-    for iter in range(max_interactions):
+    for iter in range(max_interactions+1):
         num_of_rays = len(ray_queue)
         if num_of_rays==0:
             break

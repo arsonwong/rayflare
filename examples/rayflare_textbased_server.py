@@ -86,8 +86,11 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     layer = Layer(thickness*1e-9, mat)
     return layer
 
-def bulk_profile(results, z_front):
-    global silicon_bulk_index
+def bulk_profile(results, z_front, out_path):
+    global silicon_bulk_index, output_file
+    output_file.write("0:Rayflare Server: Calculating profile for substrate\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
+
     which_bulk = silicon_bulk_index
     bulk_absorbed_front = results[0]['bulk_absorbed_front'][which_bulk]
     bulk_absorbed_rear = results[0]['bulk_absorbed_rear'][which_bulk]
@@ -108,18 +111,28 @@ def bulk_profile(results, z_front):
     absorption_profile_integral = np.sum(absorption_profile_rear*z_rear_widths[None, None, :], axis=2)
     absorption_profile_rear *= bulk_absorbed_rear[:,:,None]/absorption_profile_integral[:,:,None]
     absorption_profile_rear = np.sum(absorption_profile_rear, axis=1)
-    plt.plot(z_front*1e6,absorption_profile_front[140,:]+absorption_profile_rear[140,:], label='WL=1000nm')
-    plt.plot(z_front*1e6,absorption_profile_front[130,:]+absorption_profile_rear[130,:], label='WL=950nm')
-    plt.xlabel('z (um)')
-    plt.ylabel('absorption (arb unit)')
-    plt.legend()
-    plt.title('Absorption profile in Si')
-    plt.show()
+
+    absorption_profile = absorption_profile_front + absorption_profile_rear
+
+    if out_path is not None:
+        np.savetxt(out_path, absorption_profile, delimiter=",", fmt="%e")
+
+    # plt.plot(z_front*1e6,absorption_profile_front[140,:]+absorption_profile_rear[140,:], label='WL=1000nm')
+    # plt.plot(z_front*1e6,absorption_profile_front[130,:]+absorption_profile_rear[130,:], label='WL=950nm')
+    # plt.xlabel('z (um)')
+    # plt.ylabel('absorption (arb unit)')
+    # plt.legend()
+    # plt.title('Absorption profile in Si')
+    # plt.show()
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
-def layer_profile(results, z_front, which_layer):
-    global active_interface
+def layer_profile(results, z_front, which_layer, out_path):
+    global active_interface, output_file
+
+    output_file.write("0:Rayflare Server: Calculating profile for layer " + str(which_layer+1) + "\n")
+    output_file.flush()  # Ensure the line is written to the file immediately
+
     which_stack = active_interface
     results_per_pass = results[0]['results_per_pass']
     results_pero = np.sum(results_per_pass["a"][which_stack], 0)[:, [which_layer]]
@@ -146,8 +159,8 @@ def layer_profile(results, z_front, which_layer):
     z_rear = z_front[-1]-z_front
     part1 = Aprof_rear[:,:,0,None]*np.exp(Aprof_rear[:,:,4,None]*z_rear)
     part2 = Aprof_rear[:,:,1,None]*np.exp(-Aprof_rear[:,:,4,None]*z_rear)
-    part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
-    part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
+    # part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
+    # part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
     result = np.real(part1 + part2 + 0*part3 + 0*part4)
     absorption_profile_rear = rear_local_angles[:,:,None]*result
     absorption_profile_rear = np.sum(absorption_profile_rear,axis=1)
@@ -155,14 +168,17 @@ def layer_profile(results, z_front, which_layer):
     absorption_profile_integral = np.sum((absorption_profile_front+absorption_profile_rear)*z_front_widths[None, :], axis=1)
     absorption_profile_front *= overall_A[:,None]/absorption_profile_integral[:,None]
     absorption_profile_rear *= overall_A[:,None]/absorption_profile_integral[:,None]
+    absorption_profile = absorption_profile_front + absorption_profile_rear
 
-    plt.plot(z_front,absorption_profile_front[60]+absorption_profile_rear[60], label='WL=600nm')
-    plt.plot(z_front,absorption_profile_front[80]+absorption_profile_rear[80], label='WL=700nm')
-    plt.xlabel('z (nm)')
-    plt.ylabel('absorption (arb unit)')
-    plt.legend()
-    plt.title('Absorption profile in perovskite')
-    plt.show()
+    if out_path is not None:
+        np.savetxt(out_path, absorption_profile, delimiter=",", fmt="%e")
+    # plt.plot(z_front,absorption_profile_front[60]+absorption_profile_rear[60], label='WL=600nm')
+    # plt.plot(z_front,absorption_profile_front[80]+absorption_profile_rear[80], label='WL=700nm')
+    # plt.xlabel('z (nm)')
+    # plt.ylabel('absorption (arb unit)')
+    # plt.legend()
+    # plt.title('Absorption profile in perovskite')
+    # plt.show()
 
     return absorption_profile_front, absorption_profile_rear, z_front_widths
 
