@@ -28,6 +28,7 @@ import seaborn as sns
 
 from cycler import cycler
 
+SC = None
 output_file = None
 wavelengths = np.arange(300,1201,5) * 1e-9
 silicon_bulk_index = 0
@@ -100,6 +101,7 @@ def bulk_profile(results, z_front, out_path):
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
+    z_front_widths *= 100 #convert to cm
     absorption_profile_front = np.exp(-alphas[:,None,None] * z_front[None,None,:] / abscos[None, :, None])
     absorption_profile_integral = np.sum(absorption_profile_front*z_front_widths[None, None, :], axis=2)
     absorption_profile_front *= bulk_absorbed_front[:,:,None]/absorption_profile_integral[:,:,None]
@@ -155,6 +157,7 @@ def layer_profile(results, z_front, which_layer, out_path):
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
+    z_front_widths *= 1e-7 # conver to cm
 
     z_rear = z_front[-1]-z_front
     part1 = Aprof_rear[:,:,0,None]*np.exp(Aprof_rear[:,:,4,None]*z_rear)
@@ -169,6 +172,9 @@ def layer_profile(results, z_front, which_layer, out_path):
     absorption_profile_front *= overall_A[:,None]/absorption_profile_integral[:,None]
     absorption_profile_rear *= overall_A[:,None]/absorption_profile_integral[:,None]
     absorption_profile = absorption_profile_front + absorption_profile_rear
+
+    print("haha")
+    print(np.sum(z_front_widths))
 
     if out_path is not None:
         np.savetxt(out_path, absorption_profile, delimiter=",", fmt="%e")
@@ -187,108 +193,110 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                    bottom_cover_bulk, bottom_cover_front_materials, bottom_cover_rear_materials, 
                    bottom_cover_front_last_layer, bottom_cover_front_last_layer_R, bottom_cover_rear_last_layer, bottom_cover_rear_last_layer_R, 
                    enable_front_incidence, front_angular_distribution, enable_rear_incidence, rear_angular_distribution,
-                   front_out_path=None, rear_out_path=None):
+                   front_out_path=None, rear_out_path=None, reconstruct_SC=True):
     t1 = time.time()
-    global output_file, options, Glass, active_interface, silicon_bulk_index, active_interface_index
+    global output_file, options, Glass, active_interface, silicon_bulk_index, active_interface_index, SC
     options['output_file'] = output_file
-    output_file.write("0:Rayflare Server: Setting up the layers\n")
-    output_file.flush()  # Ensure the line is written to the file immediately
 
-    top_cover_front_surf = Interface(
-        "TMM",
-        texture=planar_surface(),
-        layers=top_cover_front_materials,
-        name="glass",
-        coherent=True
-    )
+    if reconstruct_SC:
+        output_file.write("0:Rayflare Server: Setting up the layers\n")
+        output_file.flush()  # Ensure the line is written to the file immediately
 
-    if len(top_cover_rear_materials)>0:
-        top_cover_rear_surf = Interface(
+        top_cover_front_surf = Interface(
             "TMM",
             texture=planar_surface(),
-            layers=top_cover_rear_materials[:-1],
+            layers=top_cover_front_materials,
             name="glass",
             coherent=True
         )
-        top_cover_spacer = BulkLayer(top_cover_rear_materials[-1].width, top_cover_rear_materials[-1].material, name="spacer")
 
-    if len(bottom_cover_front_materials)>0:
-        bottom_cover_front_surf = Interface(
-            "TMM",
-            texture=planar_surface(),
-            layers=bottom_cover_front_materials[1:],
-            name="glass",
-            coherent=True
-        )
-        bottom_cover_spacer = BulkLayer(bottom_cover_front_materials[0].width, bottom_cover_front_materials[0].material, name="spacer")
-
-    bottom_cover_rear_surf = Interface(
-        "TMM",
-        texture=planar_surface(),
-        layers=bottom_cover_rear_materials,
-        name="glass",
-        coherent=True
-    )
-
-    method = "RT_analytical_TMM"
-    if surf[0].N.shape[0]==2: #planar
-        method = "TMM"
-    front_surf = Interface(method,texture=surf,layers=front_materials,name="Perovskite_aSi_widthcorr",coherent=True,prof_layers=active_layer_index) #hopefully with 1-indexed, that is pero)
-    method = "RT_analytical_TMM"
-    if surf_back[0].N.shape[0]==2: #planar
-        method = "TMM"
-    back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
-
-    silicon_bulk_index = 0
-    active_interface = 0
-    active_interface_index = 0
-    list_ = []
-    if top_cover_bulk is not None:
-        silicon_bulk_index = 1
-        list_.append(top_cover_front_surf)
-        active_interface += 1 
-        active_interface_index += 1
-        list_.append(top_cover_bulk)
-        active_interface_index += 1
         if len(top_cover_rear_materials)>0:
-            silicon_bulk_index += 1
-            list_.append(top_cover_rear_surf)
+            top_cover_rear_surf = Interface(
+                "TMM",
+                texture=planar_surface(),
+                layers=top_cover_rear_materials[:-1],
+                name="glass",
+                coherent=True
+            )
+            top_cover_spacer = BulkLayer(top_cover_rear_materials[-1].width, top_cover_rear_materials[-1].material, name="spacer")
+
+        if len(bottom_cover_front_materials)>0:
+            bottom_cover_front_surf = Interface(
+                "TMM",
+                texture=planar_surface(),
+                layers=bottom_cover_front_materials[1:],
+                name="glass",
+                coherent=True
+            )
+            bottom_cover_spacer = BulkLayer(bottom_cover_front_materials[0].width, bottom_cover_front_materials[0].material, name="spacer")
+
+        bottom_cover_rear_surf = Interface(
+            "TMM",
+            texture=planar_surface(),
+            layers=bottom_cover_rear_materials,
+            name="glass",
+            coherent=True
+        )
+
+        method = "RT_analytical_TMM"
+        if surf[0].N.shape[0]==2: #planar
+            method = "TMM"
+        front_surf = Interface(method,texture=surf,layers=front_materials,name="Perovskite_aSi_widthcorr",coherent=True,prof_layers=active_layer_index) #hopefully with 1-indexed, that is pero)
+        method = "RT_analytical_TMM"
+        if surf_back[0].N.shape[0]==2: #planar
+            method = "TMM"
+        back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True)
+
+        silicon_bulk_index = 0
+        active_interface = 0
+        active_interface_index = 0
+        list_ = []
+        if top_cover_bulk is not None:
+            silicon_bulk_index = 1
+            list_.append(top_cover_front_surf)
             active_interface += 1 
             active_interface_index += 1
-            list_.append(top_cover_spacer)
+            list_.append(top_cover_bulk)
             active_interface_index += 1
-        
-    list_.append(front_surf)
-    if front_roughness is not None:
-        list_.append(front_roughness)
-    list_.append(cell_bulk)
-    if rear_roughness is not None:
-        list_.append(rear_roughness)
-    # if bottom_cover_front_last_layer > 0 or bottom_cover_rear_last_layer > 0:
-    #     if bottom_cover_front_last_layer==1 or (bottom_cover_front_last_layer==0 and bottom_cover_rear_last_layer==1):
-    #         reflector = Interface("Mirror", texture = planar_surface(), layers=[], name="mirror", coherent=True)
-    #     else:
-    #         reflector = Interface("Lambertian", texture = planar_surface(), layers=[], name="mirror", coherent=True)
-    if False: #len(back_materials)==0 and len(bottom_cover_front_materials)==0 and bottom_cover_front_last_layer > 0:
-        pass
-    else:
-        list_.append(back_surf)
+            if len(top_cover_rear_materials)>0:
+                silicon_bulk_index += 1
+                list_.append(top_cover_rear_surf)
+                active_interface += 1 
+                active_interface_index += 1
+                list_.append(top_cover_spacer)
+                active_interface_index += 1
+            
+        list_.append(front_surf)
+        if front_roughness is not None:
+            list_.append(front_roughness)
+        list_.append(cell_bulk)
+        if rear_roughness is not None:
+            list_.append(rear_roughness)
+        # if bottom_cover_front_last_layer > 0 or bottom_cover_rear_last_layer > 0:
+        #     if bottom_cover_front_last_layer==1 or (bottom_cover_front_last_layer==0 and bottom_cover_rear_last_layer==1):
+        #         reflector = Interface("Mirror", texture = planar_surface(), layers=[], name="mirror", coherent=True)
+        #     else:
+        #         reflector = Interface("Lambertian", texture = planar_surface(), layers=[], name="mirror", coherent=True)
+        if False: #len(back_materials)==0 and len(bottom_cover_front_materials)==0 and bottom_cover_front_last_layer > 0:
+            pass
+        else:
+            list_.append(back_surf)
 
-        if bottom_cover_bulk is not None:
-            if len(bottom_cover_front_materials)>0:
-                list_.append(bottom_cover_spacer)
-                list_.append(bottom_cover_front_surf)
-            list_.append(bottom_cover_bulk)
-            list_.append(bottom_cover_rear_surf)
+            if bottom_cover_bulk is not None:
+                if len(bottom_cover_front_materials)>0:
+                    list_.append(bottom_cover_spacer)
+                    list_.append(bottom_cover_front_surf)
+                list_.append(bottom_cover_bulk)
+                list_.append(bottom_cover_rear_surf)
 
-    SC = Structure(list_, incidence=top_medium, transmission=bottom_medium)
+        SC = Structure(list_, incidence=top_medium, transmission=bottom_medium)
 
-    output_file.write("0:Rayflare Server: Processing the structure\n")
-    output_file.flush()  # Ensure the line is written to the file immediately
+        output_file.write("0:Rayflare Server: Processing the structure\n")
+        output_file.flush()  # Ensure the line is written to the file immediately
 
-    options["active_interface_index"] = active_interface_index
+        options["active_interface_index"] = active_interface_index
 
-    process_structure(SC, options, overwrite=True)
+        process_structure(SC, options, overwrite=True)
 
     enable_ = [enable_front_incidence, enable_rear_incidence]
     side_ = [1, -1]
