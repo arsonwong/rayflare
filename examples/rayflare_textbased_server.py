@@ -173,9 +173,6 @@ def layer_profile(results, z_front, which_layer, out_path):
     absorption_profile_rear *= overall_A[:,None]/absorption_profile_integral[:,None]
     absorption_profile = absorption_profile_front + absorption_profile_rear
 
-    print("haha")
-    print(np.sum(z_front_widths))
-
     if out_path is not None:
         np.savetxt(out_path, absorption_profile, delimiter=",", fmt="%e")
     # plt.plot(z_front,absorption_profile_front[60]+absorption_profile_rear[60], label='WL=600nm')
@@ -307,10 +304,12 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             options["incident_side"] = side_[i12]
             if i12==0:
                 options["incidence_angular_distribution"] = front_angular_distribution
-                output_file.write("0:Rayflare Server: Simulating front incidence\n")
+                options["message"] = "0:Rayflare Server: Simulating front incidence"
+                output_file.write(options["message"] + "\n")
             else:
                 options["incidence_angular_distribution"] = rear_angular_distribution
-                output_file.write("0:Rayflare Server: Simulating rear incidence\n")
+                options["message"] = "0:Rayflare Server: Simulating rear incidence"
+                output_file.write(options["message"] + "\n")
             
             output_file.flush()  # Ensure the line is written to the file immediately
 

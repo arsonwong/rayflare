@@ -248,6 +248,7 @@ def load_redistribution_matrices(
                 fullmat_forwardscatter_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][1]
                 absmat_ = stored_redistribution_matrices[front_or_rear][interfaceIndices[i1]][2]
             else:
+                assert(1==0)
                 mat_path = os.path.join(
                     results_path, layer_names[i1] + side_code[front_or_rear] + "RT.npz"
                 )
@@ -788,7 +789,11 @@ def matrix_multiplication(
                     power[:] = 0.0
                     for i1 in range(max(1,n_bulks)):
                         power += np.sum(vf_1[i1][-1], axis=1)
-                logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
+
+                output_file = options["output_file"]
+                output_file.write(options["message"] + "- residue = " + str(round(np.max(power)*10000)/100) + "%\n")           
+                output_file.flush()  # Ensure the line is written to the file immediately
+                # logger.info(f"After iteration {i2}: maximum power fraction remaining = {np.max(power)}")
                 i2 += 1
 
         vr = [np.array(item) for item in vr]

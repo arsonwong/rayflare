@@ -297,6 +297,7 @@ def RT(
                     R_T_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = R_T_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
                     A_table[:,:,i*wavelengths.size:(i+1)*wavelengths.size] = A_table_[:,:,(i+1)*full_wavelength_size-wavelengths.size:(i+1)*full_wavelength_size] 
 
+            
             n_angles = options["lookuptable_angles"]
             if only_incidence_angle: 
                 theta_in = options["theta_in"]               
@@ -348,9 +349,16 @@ def RT(
                 # Parallel n_jobs = 1: 1.38s, 2: 0.76s, 4:0.43s, 8:0.46s
                 # multiprocessing not working, for some reason
                 # 2024-04-03 got it down to Parallel n_jobs = 1: 0.3218s, 2: 0.2006s, 4:0.1533s, 8:0.228s
-                allres = Parallel(n_jobs=1)(
-                    delayed(RT_analytical)(
-                        angles_in[i1],
+                output_file = options['output_file']
+                allres = []
+                next_percentage = 0.0
+                for i1 in range(angles_in.shape[0]):
+                    percentage = float(i1)/float(angles_in.shape[0])
+                    if percentage >= next_percentage:
+                        output_file.write(options["message"] + " " + front_or_rear + ": " + str(round(100*next_percentage)) + "%\n")
+                        output_file.flush()
+                        next_percentage += 0.1
+                    allres.append(RT_analytical(angles_in[i1],
                         stacked_wavelengths,
                         n0,
                         n1,
@@ -369,9 +377,33 @@ def RT(
                         A_table,
                         n_angles,
                         side,
-                    )
-                    for i1 in range(angles_in.shape[0])
-                )
+                    ))
+                                
+
+                # allres = Parallel(n_jobs=1)(
+                #     delayed(RT_analytical)(
+                #         angles_in[i1],
+                #         stacked_wavelengths,
+                #         n0,
+                #         n1,
+                #         10,
+                #         surfaces[0],
+                #         phi_sym,
+                #         theta_intv,
+                #         phi_intv,
+                #         N_azimuths,
+                #         theta_first_index,
+                #         angle_vector,
+                #         Fr_or_TMM,
+                #         n_absorbing_layers,
+                #         radian_table,
+                #         R_T_table,
+                #         A_table,
+                #         n_angles,
+                #         side,
+                #     )
+                #     for i1 in range(angles_in.shape[0])
+                # )
 
         allArrays_backscatter = stack([item[0] for item in allres])
         allArrays_forwardscatter = stack([item[1] for item in allres])

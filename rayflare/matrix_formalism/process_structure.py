@@ -98,12 +98,11 @@ def process_structure(SC, options, save_location="default", overwrite=False):
     for i1, struct in enumerate(SC):        
         if isinstance(struct, Interface):
             # Check: is this an interface type which requires a lookup table?
-
             if struct.method == "RT_TMM" or struct.method == "RT_analytical_TMM" or struct.method == "TMM":
                 if 'output_file' in options:
-                    front_rear = ['front', 'rear']
                     output_file = options['output_file']
-                    output_file.write("0:Rayflare Server: Making lookup table for " + front_rear[min(i1,1)] + "\n")
+                    options["message"] = "0:Rayflare Server: Making lookup table for struct #" + str(i1+1) + " of " + str(len(SC))
+                    output_file.write(options["message"] + "\n")
                     output_file.flush()  # Ensure the line is written to the file immediately
 
                 logger.info(f"Making RT/TMM lookuptable for element {i1} in structure")
@@ -227,9 +226,9 @@ def process_structure(SC, options, save_location="default", overwrite=False):
     
     for i1, struct in enumerate(SC):
         if 'output_file' in options:
-            front_rear = ['front', 'rear']
             output_file = options['output_file']
-            output_file.write("0:Rayflare Server: Doing ray tracing for " + front_rear[min(i1,1)] + "\n")
+            options["message"] = "0:Rayflare Server: Doing ray tracing for struct #" + str(i1+1) + " of " + str(len(SC))
+            output_file.write(options["message"] + "\n")
             output_file.flush()  # Ensure the line is written to the file immediately
 
         if isinstance(struct, BulkLayer):
