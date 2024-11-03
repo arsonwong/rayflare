@@ -665,7 +665,7 @@ def matrix_multiplication(
                     name="Tfirst",
                 )
                                 
-                vr[-1].append(dot_wl(Rb[-1], v0))  # reflected from front surface
+                vt[-1].append(dot_wl(Rb[-1], v0))  # reflected from front surface
                 a[-1].append(
                     dot_wl(Ab[-1], v0)
                 )  # absorbed in front surface at first interaction
