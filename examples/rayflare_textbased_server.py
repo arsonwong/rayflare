@@ -31,7 +31,7 @@ from cycler import cycler
 SC = None
 output_file = None
 wavelengths = np.arange(300,1201,5) * 1e-9
-silicon_bulk_index = 0
+bulk_indices = [0,0,0]
 active_interface = []
 options = default_options()
 options.wavelength = wavelengths
@@ -87,11 +87,11 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     return layer
 
 def bulk_profile(results, z_front, out_path):
-    global silicon_bulk_index, output_file
+    global bulk_indices, output_file
     output_file.write("0:Rayflare Server: Calculating profile for substrate\n")
     output_file.flush()  # Ensure the line is written to the file immediately
 
-    which_bulk = silicon_bulk_index
+    which_bulk = bulk_indices[1]
     bulk_absorbed_front = results[0]['bulk_absorbed_front'][which_bulk]
     bulk_absorbed_rear = results[0]['bulk_absorbed_rear'][which_bulk]
     alphas = results[0]['alphas'][which_bulk]
@@ -189,10 +189,11 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                    enable_front_incidence, front_angular_distribution, enable_rear_incidence, rear_angular_distribution,
                    front_out_path=None, rear_out_path=None, reconstruct_SC=True):
     t1 = time.time()
-    global output_file, options, Glass, active_interface, silicon_bulk_index, SC
+    global output_file, options, Glass, active_interface, bulk_indices, SC
     options['output_file'] = output_file
 
     active_layer_indices = [active_layer_indices1,active_layer_indices2,active_layer_indices3,active_layer_indices4,active_layer_indices5,active_layer_indices6]
+
 
     if reconstruct_SC:
         output_file.write("0:Rayflare Server: Setting up the layers\n")
@@ -247,18 +248,19 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             method = "TMM"
         back_surf = Interface(method, texture=surf_back, layers=back_materials, name="aSi_ITO_2", coherent=True,prof_layers=active_layer_indices[3])
 
-        silicon_bulk_index = 0
+        bulk_indices = [-1,0,-1]
         active_interface = [-1,-1,-1,-1,-1,-1]
         list_ = []
         interface_index = 0
         if top_cover_bulk is not None:
-            silicon_bulk_index = 1
+            bulk_indices[0] = 0
+            bulk_indices[1] = 1
             list_.append(top_cover_front_surf)
             active_interface[0] = interface_index
             interface_index += 1
             list_.append(top_cover_bulk)
             if len(top_cover_rear_materials)>0:
-                silicon_bulk_index += 1
+                bulk_indices[1] += 1
                 list_.append(top_cover_rear_surf)
                 active_interface[1] = interface_index
                 interface_index += 1
@@ -285,8 +287,10 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             interface_index += 1
 
             if bottom_cover_bulk is not None:
+                bulk_indices[2] = bulk_indices[1]+1
                 if len(bottom_cover_front_materials)>0:
                     list_.append(bottom_cover_spacer)
+                    bulk_indices[2] += 1
                     list_.append(bottom_cover_front_surf)
                     active_interface[4] = interface_index
                     interface_index += 1
@@ -333,24 +337,52 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             results_per_pass = results[0]['results_per_pass']
 
             output = [wavelengths*1e9]
-            columns = ['Wavelength(nm)','Cover transmittance']
+            columns = ['Wavelength(nm)','Reflectance','Transmittance']
             if i12==0:
-                t = results_per_pass["t"][0][0,:,:]
+                t = np.sum(results_per_pass["t"][-1],axis=0)
+                r = np.sum(results_per_pass["r"][0],axis=0)
             else:
-                t = results_per_pass["r"][-1][0,:,:]
+                t = np.sum(results_per_pass["r"][0],axis=0)
+                r = np.sum(results_per_pass["t"][-1],axis=0)
             t = np.sum(t,axis=1)
+            r = np.sum(r,axis=1)
+            output.append(r)
             output.append(t)
 
-            for i, indices in enumerate(active_layer_indices):
-                for index in indices:
-                    results_A_ = np.sum(results_per_pass["a"][active_interface[i]], 0)[:, [index-1]]
-                    A_ = results_A_[:,0] # just flatten
-                    output.append(A_)
-                    columns.append('A'+str(i)+'-'+str(index))
+            # switch to outputing everything
+            print("kaka")
+            print(active_interface)
+            print("now columns are")
+            print(columns)
+            for i, interface_index in enumerate(active_interface):
+                if interface_index >= 0:
+                    print("lala")
+                    print(i)
+                    print(interface_index)
+                    A_interface = np.sum(results_per_pass["a"][interface_index], 0)
+                    for col in range(A_interface.shape[1]):
+                        output.append(A_interface[:,col])
+                        columns.append('A'+str(i)+'-'+str(col))
+                        print("now columns are")
+                        print(columns)
 
-            A_Si = RAT["A_bulk"][silicon_bulk_index]
-            output.append(A_Si)
-            columns.append('A_substrate')
+            for i, bulk_index in enumerate(bulk_indices):
+                if bulk_index >= 0:
+                    output.append(RAT["A_bulk"][bulk_index])
+                else:
+                    output.append(np.zeros_like(wavelengths))
+                columns.append('Abulk-'+str(i))
+
+            # for i, indices in enumerate(active_layer_indices):
+            #     for index in indices:
+            #         results_A_ = np.sum(results_per_pass["a"][active_interface[i]], 0)[:, [index-1]]
+            #         A_ = results_A_[:,0] # just flatten
+            #         output.append(A_)
+            #         columns.append('A'+str(i)+'-'+str(index))
+
+            # A_Si = RAT["A_bulk"][bulk_indices[1]]
+            # output.append(A_Si)
+            # columns.append('A_substrate')
 
             if i12==0:
                 out_path = front_out_path
@@ -360,7 +392,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             if out_path is not None:
                 output = np.array(output).T
                 df = pd.DataFrame(output, columns=columns)
-                df.to_csv(out_path, index=False)        
+                df.to_csv(out_path, index=False)   
 
     return front_results, rear_results
 
