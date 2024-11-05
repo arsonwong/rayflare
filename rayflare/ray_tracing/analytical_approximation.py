@@ -424,6 +424,11 @@ def RT_analytical(
                             dist2 = radian_table[index+1] - angle_inc[j,i]
                             R_T_entry = (R_T_table[index]*dist2 + R_T_table[index+1]*dist1)/(dist1+dist2)
                             A_entry = (A_table[index]*dist2 + A_table[index+1]*dist1)/(dist1+dist2)
+                            out_sin = np.sin(angle_inc[j,i])*(np.real(n0) / np.real(n1))
+                            find_ = np.where(out_sin > 1)[0]
+                            if len(find_)>0:
+                                R_T_entry[:,find_] = R_T_table[index+1][:,find_]
+                                A_entry[:,find_] = A_table[index+1][:,find_]
 
                         Rs = R_T_entry[0]
                         Rp = R_T_entry[2]

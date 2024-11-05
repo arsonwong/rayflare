@@ -34,7 +34,7 @@ def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin", out
         )  # number of bins is between 0 and 90 degrees
         # even spacing in terms of sin(theta) rather than theta
         # will have the same number of bins between 90 and 180 degrees
-
+        sin_a_b = np.insert(sin_a_b, 1, (sin_a_b[1]-sin_a_b[0]) / 2)
         theta_intv = np.concatenate(
             [np.arcsin(sin_a_b), np.pi - np.flip(np.arcsin(sin_a_b[:-1]))]
         )
@@ -42,9 +42,12 @@ def make_angle_vector(n_angle_bins, phi_sym, c_azimuth, theta_spacing="sin", out
     elif theta_spacing == "linear":
         theta_intv = np.linspace(0, np.pi / 2, n_angle_bins + 1)
 
+        theta_intv = np.insert(theta_intv, 1, (theta_intv[1]-theta_intv[0]) / 2)
+
         theta_intv = np.concatenate([theta_intv, np.pi - np.flip(theta_intv[:-1])])
 
     theta_middle = (theta_intv[:-1] + theta_intv[1:]) / 2
+    theta_middle[0] = 0.0
     phi_intv = []
     angle_vector = np.empty((0, 3))
 

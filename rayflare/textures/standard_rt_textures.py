@@ -48,7 +48,7 @@ def regular_pyramids(elevation_angle=54.74, upright=True, size=1, **kwargs):
     surf_fi = RTSurface(Points, **kwargs)
 
     Points_ri = np.vstack([x, y, -z]).T
-    surf_ri = RTSurface(Points_ri)
+    surf_ri = RTSurface(Points_ri, **kwargs)
     surf_ri.name = surf_fi.name
 
     return [surf_fi, surf_ri]

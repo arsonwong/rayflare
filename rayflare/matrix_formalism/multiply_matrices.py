@@ -812,7 +812,9 @@ def matrix_multiplication(
         total_vf_2 = [np.sum(item, axis=0) for item in vf_2]
         total_vf_1 = [np.sum(item, axis=0) for item in vf_1]
         total_vb_2 = [np.sum(item, axis=0) for item in vb_2]
-        rear_local_angles = np.einsum('ij,jk->ik',total_vf_2[0],local_angle_mats[0][1])
+        # not doing layer profile for now, skip this.  Problematic, as sometimes vf_2 = []
+        rear_local_angles = []
+        # rear_local_angles = np.einsum('ij,jk->ik',total_vf_2[0],local_angle_mats[0][1])
 
         sum_dims = ["bulk_index", "wl"]
         sum_coords = {"bulk_index": np.arange(0, max(1,n_bulks)), "wl": options["light_trapping_wavelength"]}
@@ -858,6 +860,7 @@ def matrix_multiplication(
             grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles, 'bulk_absorbed_front': bulk_absorbed_front, 'bulk_absorbed_rear': bulk_absorbed_rear, 'alphas':alphas, 'abscos': abscos})
 
         else:
+            assert(1==0)
             RAT = xr.merge([R, Tfirst])
             results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
 

@@ -36,7 +36,7 @@ active_interface = []
 options = default_options()
 options.wavelength = wavelengths
 options.only_incidence_angle = False
-# options.lookuptable_angles = 200
+options.lookuptable_angles = 1000
 # options.parallel = True
 options.project_name = "perovskite_Si_example"
 options.n_rays = 2000
@@ -144,6 +144,7 @@ def layer_profile(results, z_front, which_interface, which_layer, out_path):
 
     Aprof_front = Aprof[which_layer][0] # layer1,side1
     Aprof_rear = Aprof[which_layer][1] # backside 
+    # check this - seems to be wrong
     front_local_angles = results[0]['front_local_angles']
     rear_local_angles = results[0]['rear_local_angles']
 
@@ -350,21 +351,12 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             output.append(t)
 
             # switch to outputing everything
-            print("kaka")
-            print(active_interface)
-            print("now columns are")
-            print(columns)
             for i, interface_index in enumerate(active_interface):
                 if interface_index >= 0:
-                    print("lala")
-                    print(i)
-                    print(interface_index)
                     A_interface = np.sum(results_per_pass["a"][interface_index], 0)
                     for col in range(A_interface.shape[1]):
                         output.append(A_interface[:,col])
                         columns.append('A'+str(i)+'-'+str(col))
-                        print("now columns are")
-                        print(columns)
 
             for i, bulk_index in enumerate(bulk_indices):
                 if bulk_index >= 0:
@@ -426,13 +418,14 @@ with open(input_file_path, 'r') as input_file:
         line_after_colon = line_split[1]
         print(f"New line: {line.strip()}")
         output_file.write(line_before_colon + ": received\n")
-        try:
-            exec(line_after_colon)
-        except Exception as e:
-            # This block will catch any exception and print the error message
-            print(f"An error occurred: {e}")
-            output_file.write(f"-1: Error: {e}\n")
-            break
+        exec(line_after_colon)
+        # try:
+        #     exec(line_after_colon)
+        # except Exception as e:
+        #     # This block will catch any exception and print the error message
+        #     print(f"An error occurred: {e}")
+        #     output_file.write(f"-1: Error: {e}\n")
+        #     break
         output_file.write(line_before_colon + ": executed\n")
         output_file.flush()  # Ensure the line is written to the file immediately
     output_file.close()
