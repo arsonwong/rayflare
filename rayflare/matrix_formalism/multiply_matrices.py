@@ -695,7 +695,7 @@ def matrix_multiplication(
             if n_bulks==0:
                 break
 
-            while np.any(power > options["I_thresh"]):
+            while i2==1 or np.any(power > options["I_thresh"]):
                 if incident_side==-1:
                     # traverse upwards through all the bulks
                     for i1 in range(max(1, n_bulks) - 1, -1, -1):
