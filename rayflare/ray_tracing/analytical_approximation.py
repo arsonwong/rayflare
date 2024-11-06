@@ -428,6 +428,12 @@ def RT_analytical(
                             find_ = np.where(out_sin > 1)[0]
                             if len(find_)>0:
                                 R_T_entry[:,find_] = R_T_table[index+1][:,find_]
+                                Ts_ = R_T_entry[1,find_]
+                                R_T_entry[0,find_] += Ts_
+                                R_T_entry[1,find_] = 0.0
+                                Tp_ = R_T_entry[3,find_]
+                                R_T_entry[2,find_] += Tp_
+                                R_T_entry[3,find_] = 0.0
                                 A_entry[:,find_] = A_table[index+1][:,find_]
 
                         Rs = R_T_entry[0]
