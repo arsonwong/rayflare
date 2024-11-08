@@ -147,7 +147,7 @@ def make_roughness(stdev, phi_sym, theta_intv, phi_intv, N_azimuths, theta_first
     direction = np.column_stack((np.sin(thetas_in)*np.cos(phis_in), np.sin(thetas_in)*np.sin(phis_in), -np.cos(thetas_in)))
     dir1,dir2 = make_arbitrary_perpendicular_directions(direction)
     scatter_angle_vector, intensities = make_scatter_angle_vector(stdev, 7, 1, theta_spacing="sin")
-    allres = Parallel(n_jobs=4)(
+    allres = Parallel(n_jobs=1)(
         delayed(scatter)(direction[i1],dir1[i1],dir2[i1],scatter_angle_vector, intensities, phi_sym, theta_intv, phi_intv, N_azimuths, theta_first_index, angle_vector, num_wl)
                     for i1 in range(direction.shape[0])
                 )

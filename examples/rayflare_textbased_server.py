@@ -4,7 +4,8 @@ import os
 import sys
 import pandas as pd
 from copy import deepcopy
-sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0,r"C:\Users\arson\Documents\rayflare_fork")
+# sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
 sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
 
@@ -415,17 +416,19 @@ with open(input_file_path, 'r') as input_file:
         print(line)
         line_split = line.split(":",1)
         line_before_colon = line_split[0]
-        line_after_colon = line_split[1]
-        print(f"New line: {line.strip()}")
+        line_after_colon = line_split[1].strip()
         output_file.write(line_before_colon + ": received\n")
-        exec(line_after_colon)
-        # try:
-        #     exec(line_after_colon)
-        # except Exception as e:
-        #     # This block will catch any exception and print the error message
-        #     print(f"An error occurred: {e}")
-        #     output_file.write(f"-1: Error: {e}\n")
-        #     break
+        if line_after_colon=="exit":
+            output_file.write(line_before_colon + ": executed\n")
+            break
+        print(f"New line: {line.strip()}")
+        try:
+            exec(line_after_colon)
+        except Exception as e:
+            # This block will catch any exception and print the error message
+            print(f"An error occurred: {e}")
+            output_file.write(f"-1: Error: {e}\n")
+            break
         output_file.write(line_before_colon + ": executed\n")
         output_file.flush()  # Ensure the line is written to the file immediately
     output_file.close()
