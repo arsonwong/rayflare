@@ -80,8 +80,6 @@ def create_new_material(name, n_file_path, k_file_path=None):
         mat.load_nk_data()
     return mat
 
-Glass = create_new_material('Glass',r'C:\Users\arson\Documents\rayflare_fork\temp\glass.txt')
-
 def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     mat = create_new_material(name, n_file_path, k_file_path)
     layer = Layer(thickness*1e-9, mat)
@@ -393,20 +391,17 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
 input_file_path = 'logfile.txt'
 output_file_path = 'output_log.txt'
 
-with open(input_file_path, 'w') as file:
-    pass  # Just opening the file is enough to erase its contents
+# with open(input_file_path, 'w') as file:
+#     pass  # Just opening the file is enough to erase its contents
 
-with open(output_file_path, 'w') as file:
-    pass  # Just opening the file is enough to erase its contents
+# with open(output_file_path, 'w') as file:
+#     pass  # Just opening the file is enough to erase its contents
 
 with open(input_file_path, 'r') as input_file:
     output_file = open(output_file_path, 'a')
 
-    output_file.write("0:Rayflare Server: Setting up the layers\n")
-    output_file.flush()  # Ensure the line is written to the file immediately
-
-    # Move to the end of the file
-    input_file.seek(0, 2) 
+    # # Move to the end of the file
+    # input_file.seek(0, 2) 
     
     while True:
         line = input_file.readline()
