@@ -231,8 +231,7 @@ def load_redistribution_matrices(
         Is.append([])
         local_angle_mats.append([[],[]])
         local_angle_mats[i1][0] = stored_redistribution_matrices[0][interfaceIndices[i1]][3]
-        if not (i1 == n_interfaces-1 and front_or_rear==1):
-            local_angle_mats[i1][1] = stored_redistribution_matrices[1][interfaceIndices[i1]][3]
+        local_angle_mats[i1][1] = stored_redistribution_matrices[1][interfaceIndices[i1]][3]
 
         for front_or_rear in range(2):
             # if i1 == n_interfaces-1 and front_or_rear==1:
@@ -805,16 +804,43 @@ def matrix_multiplication(
         a = [np.array(item) for item in a]
         A = [np.array(item) for item in A]
 
-        front_local_angles = np.einsum('ij,jk->ik', v0,local_angle_mats[0][0])
-
         # --------------------------------------------------
 
+        total_vb_1 = [np.sum(item, axis=0) for item in vb_1]
         total_vf_2 = [np.sum(item, axis=0) for item in vf_2]
         total_vf_1 = [np.sum(item, axis=0) for item in vf_1]
         total_vb_2 = [np.sum(item, axis=0) for item in vb_2]
-        # not doing layer profile for now, skip this.  Problematic, as sometimes vf_2 = []
+
+        incident_side = 1
+        if "incident_side" in options:
+            incident_side = options["incident_side"]
+
+        front_local_angles = []
         rear_local_angles = []
-        # rear_local_angles = np.einsum('ij,jk->ik',total_vf_2[0],local_angle_mats[0][1])
+        for i1 in range(max(1,n_bulks)+1):
+            if i1==0:
+                if incident_side==1:
+                    front_local_angles.append(np.einsum('ij,jk->ik', v0,local_angle_mats[i1][0]))
+                else:
+                    front_local_angles.append(None)
+            else:
+                if len(total_vb_1[i1-1])==0:
+                    front_local_angles.append(None)
+                else:
+                    front_local_angles.append(np.einsum('ij,jk->ik',total_vb_1[i1-1],local_angle_mats[i1-1][0]))
+
+            if i1==max(1,n_bulks):
+                if incident_side==-1:
+                    print(v0.shape)
+                    print(local_angle_mats[i1][1].shape)
+                    rear_local_angles.append(np.einsum('ij,jk->ik', v0,local_angle_mats[i1][1]))
+                else:
+                    rear_local_angles.append(None)
+            else:
+                if len(total_vf_2[i1])==0:
+                    rear_local_angles.append(None)
+                else:
+                    rear_local_angles.append(np.einsum('ij,jk->ik',total_vf_2[i1],local_angle_mats[i1][1]))
 
         sum_dims = ["bulk_index", "wl"]
         sum_coords = {"bulk_index": np.arange(0, max(1,n_bulks)), "wl": options["light_trapping_wavelength"]}

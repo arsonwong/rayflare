@@ -33,7 +33,7 @@ SC = None
 output_file = None
 wavelengths = np.arange(300,1201,5) * 1e-9
 bulk_indices = [0,0,0]
-active_interface = []
+active_interface = [-1,-1,-1,-1,-1,-1] 
 options = default_options()
 options.wavelength = wavelengths
 options.only_incidence_angle = False
@@ -135,6 +135,7 @@ def layer_profile(results, z_front, which_interface, which_layer, out_path):
             if which_stack==interface_count:
                 Aprof = SC.TMM_lookup_table[i1]['Aprof']
                 Aprof = 0.5*(Aprof.loc[dict(pol='s')]+Aprof.loc[dict(pol='p')]).values
+                break
             interface_count += 1
 
     results_per_pass = results[0]['results_per_pass']
@@ -143,31 +144,38 @@ def layer_profile(results, z_front, which_interface, which_layer, out_path):
 
     Aprof_front = Aprof[which_layer][0] # layer1,side1
     Aprof_rear = Aprof[which_layer][1] # backside 
-    # check this - seems to be wrong
-    front_local_angles = results[0]['front_local_angles']
-    rear_local_angles = results[0]['rear_local_angles']
-
-    part1 = Aprof_front[:,:,0,None]*np.exp(Aprof_front[:,:,4,None]*z_front)
-    part2 = Aprof_front[:,:,1,None]*np.exp(-Aprof_front[:,:,4,None]*z_front)
-    part3 = (Aprof_front[:,:,2,None] + 1j * Aprof_front[:,:,3,None])*np.exp(1j * Aprof_front[:,:,5,None]*z_front)
-    part4 = (Aprof_front[:,:,2,None] - 1j * Aprof_front[:,:,3,None])*np.exp(-1j * Aprof_front[:,:,5,None]*z_front)
-    result = np.real(part1 + part2 + 0*part3 + 0*part4)
-    absorption_profile_front = front_local_angles[:,:,None]*result
-    absorption_profile_front = np.sum(absorption_profile_front,axis=1)
+    front_local_angles = results[0]['front_local_angles'][which_stack]
+    rear_local_angles = results[0]['rear_local_angles'][which_stack]
 
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
     z_front_widths *= 1e-7 # conver to cm
 
+    if front_local_angles is not None:
+        part1 = Aprof_front[:,:,0,None]*np.exp(Aprof_front[:,:,4,None]*z_front)
+        part2 = Aprof_front[:,:,1,None]*np.exp(-Aprof_front[:,:,4,None]*z_front)
+        result = np.real(part1 + part2)
+        # part3 = (Aprof_front[:,:,2,None] + 1j * Aprof_front[:,:,3,None])*np.exp(1j * Aprof_front[:,:,5,None]*z_front)
+        # part4 = (Aprof_front[:,:,2,None] - 1j * Aprof_front[:,:,3,None])*np.exp(-1j * Aprof_front[:,:,5,None]*z_front)
+        # result = np.real(part1 + part2 + part3 + part4)
+        absorption_profile_front = front_local_angles[:,:,None]*result
+        absorption_profile_front = np.sum(absorption_profile_front,axis=1)
+    else:
+        absorption_profile_front = np.zeros((overall_A.shape[0],z_front.shape[0]))
+
     z_rear = z_front[-1]-z_front
-    part1 = Aprof_rear[:,:,0,None]*np.exp(Aprof_rear[:,:,4,None]*z_rear)
-    part2 = Aprof_rear[:,:,1,None]*np.exp(-Aprof_rear[:,:,4,None]*z_rear)
-    # part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
-    # part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
-    result = np.real(part1 + part2 + 0*part3 + 0*part4)
-    absorption_profile_rear = rear_local_angles[:,:,None]*result
-    absorption_profile_rear = np.sum(absorption_profile_rear,axis=1)
+    if rear_local_angles is not None:
+        part1 = Aprof_rear[:,:,0,None]*np.exp(Aprof_rear[:,:,4,None]*z_rear)
+        part2 = Aprof_rear[:,:,1,None]*np.exp(-Aprof_rear[:,:,4,None]*z_rear)
+        result = np.real(part1 + part2)
+        # part3 = (Aprof_rear[:,:,2,None] + 1j * Aprof_rear[:,:,3,None])*np.exp(1j * Aprof_rear[:,:,5,None]*z_rear)
+        # part4 = (Aprof_rear[:,:,2,None] - 1j * Aprof_rear[:,:,3,None])*np.exp(-1j * Aprof_rear[:,:,5,None]*z_rear)
+        # result = np.real(part1 + part2 + part3 + part4)
+        absorption_profile_rear = rear_local_angles[:,:,None]*result
+        absorption_profile_rear = np.sum(absorption_profile_rear,axis=1)
+    else:
+        absorption_profile_rear = np.zeros((overall_A.shape[0],z_rear.shape[0]))
 
     absorption_profile_integral = np.sum((absorption_profile_front+absorption_profile_rear)*z_front_widths[None, :], axis=1)
     absorption_profile_front *= overall_A[:,None]/absorption_profile_integral[:,None]
@@ -189,7 +197,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                    enable_front_incidence, front_angular_distribution, enable_rear_incidence, rear_angular_distribution,
                    front_out_path=None, rear_out_path=None, reconstruct_SC=True):
     t1 = time.time()
-    global output_file, options, Glass, active_interface, bulk_indices, SC
+    global output_file, options, active_interface, bulk_indices, SC
     options['output_file'] = output_file
 
     active_layer_indices = [active_layer_indices1,active_layer_indices2,active_layer_indices3,active_layer_indices4,active_layer_indices5,active_layer_indices6]
@@ -417,13 +425,14 @@ with open(input_file_path, 'r') as input_file:
             output_file.write(line_before_colon + ": executed\n")
             break
         print(f"New line: {line.strip()}")
-        try:
-            exec(line_after_colon)
-        except Exception as e:
-            # This block will catch any exception and print the error message
-            print(f"An error occurred: {e}")
-            output_file.write(f"-1: Error: {e}\n")
-            break
+        exec(line_after_colon)
+        # try:
+        #     exec(line_after_colon)
+        # except Exception as e:
+        #     # This block will catch any exception and print the error message
+        #     print(f"An error occurred: {e}")
+        #     output_file.write(f"-1: Error: {e}\n")
+        #     break
         output_file.write(line_before_colon + ": executed\n")
         output_file.flush()  # Ensure the line is written to the file immediately
     output_file.close()
