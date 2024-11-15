@@ -30,6 +30,10 @@ def make_D(alphas, thick, thetas):
     :return:
     """
     diag = np.exp(-alphas[:, None] * thick / abs(np.cos(thetas[None, :])))
+    # print(thetas)
+    # print(diag)
+    # print(thick)
+    # assert(1==0)
     D_1 = stack([COO.from_numpy(np.diag(x)) for x in diag])
     return D_1
 

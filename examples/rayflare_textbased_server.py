@@ -85,6 +85,7 @@ def create_new_layer(name, thickness, n_file_path, k_file_path=None):
     layer = Layer(thickness*1e-9, mat)
     return layer
 
+# z_front is in um
 def bulk_profile(results, z_front, out_path):
     global bulk_indices, output_file
     output_file.write("0:Rayflare Server: Calculating profile for substrate\n")
@@ -99,15 +100,15 @@ def bulk_profile(results, z_front, out_path):
     z_front_widths = 0.5*(z_front[2:]-z_front[:-2])
     z_front_widths = np.insert(z_front_widths, 0, 0.5*(z_front[1]-z_front[0]))
     z_front_widths = np.append(z_front_widths, 0.5*(z_front[-1]-z_front[-2]))
-    z_front_widths *= 100 #convert to cm
-    absorption_profile_front = np.exp(-alphas[:,None,None] * z_front[None,None,:] / abscos[None, :, None])
+    z_front_widths *= 1e-4 #convert to cm
+    absorption_profile_front = np.exp(-alphas[:,None,None] * z_front[None,None,:] * 1e-6 / abscos[None, :, None])
     absorption_profile_integral = np.sum(absorption_profile_front*z_front_widths[None, None, :], axis=2)
     absorption_profile_front *= bulk_absorbed_front[:,:,None]/absorption_profile_integral[:,:,None]
     absorption_profile_front = np.sum(absorption_profile_front, axis=1)
 
     z_rear = z_front[-1] - z_front
     z_rear_widths = z_front_widths
-    absorption_profile_rear = np.exp(-alphas[:,None,None] * z_rear[None,None,:] / abscos[None, :, None])
+    absorption_profile_rear = np.exp(-alphas[:,None,None] * z_rear[None,None,:] * 1e-6 / abscos[None, :, None])
     absorption_profile_integral = np.sum(absorption_profile_rear*z_rear_widths[None, None, :], axis=2)
     absorption_profile_rear *= bulk_absorbed_rear[:,:,None]/absorption_profile_integral[:,:,None]
     absorption_profile_rear = np.sum(absorption_profile_rear, axis=1)

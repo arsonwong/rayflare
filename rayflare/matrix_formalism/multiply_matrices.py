@@ -871,15 +871,16 @@ def matrix_multiplication(
             results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
 
             RAT = xr.merge([R, A_bulk, T, Tfirst])
-            abscos = 1./np.cos(thetas)
+            abscos = np.abs(np.cos(thetas))
 
             alphas = []
             bulk_absorbed_front = []
             bulk_absorbed_rear = []
             for i in range(len(bulk_mats)):
                 alphas.append(bulk_mats[i].alpha(options["wavelength"]))
-                # wavelength, angles
                 absorbed_fraction = 1 - np.exp(-alphas[-1][:,None] * bulk_thick[i] / abscos[None, :])
+                # bulk_absorbed_front.append(total_vf_1[i]-dot_wl(D[i], total_vf_1[i]))
+                # bulk_absorbed_rear.append(total_vb_2[i]-dot_wl(D[i], total_vb_2[i]))
                 bulk_absorbed_front.append(total_vf_1[i]*absorbed_fraction)
                 bulk_absorbed_rear.append(total_vb_2[i]*absorbed_fraction)
 
