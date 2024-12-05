@@ -4,6 +4,7 @@ import os
 import sys
 import pandas as pd
 from copy import deepcopy
+import pickle
 sys.path.insert(0,r"C:\Users\arson\Documents\rayflare_fork")
 # sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
@@ -346,7 +347,7 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
             results_per_pass = results[0]['results_per_pass']
 
             output = [wavelengths*1e9]
-            columns = ['Wavelength(nm)','Reflectance','Transmittance']
+            columns = ['Wavelength(nm)','First Reflectance','Reflectance','Transmittance']
             if i12==0:
                 t = np.sum(results_per_pass["t"][-1],axis=0)
                 r = np.sum(results_per_pass["r"][0],axis=0)
@@ -355,6 +356,8 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                 r = np.sum(results_per_pass["t"][-1],axis=0)
             t = np.sum(t,axis=1)
             r = np.sum(r,axis=1)
+            r1st = RAT['Rfirst']
+            output.append(r1st)
             output.append(r)
             output.append(t)
 
@@ -388,6 +391,9 @@ def run_simulation(top_medium, bottom_medium, front_materials, front_roughness, 
                 out_path = front_out_path
             else:
                 out_path = rear_out_path
+
+            # with open("output" + str(i12) + ".pkl", "wb") as file:
+            #     pickle.dump(output, file)
 
             if out_path is not None:
                 output = np.array(output).T
@@ -426,14 +432,14 @@ with open(input_file_path, 'r') as input_file:
             output_file.write(line_before_colon + ": executed\n")
             break
         print(f"New line: {line.strip()}")
-        exec(line_after_colon)
-        # try:
-        #     exec(line_after_colon)
-        # except Exception as e:
-        #     # This block will catch any exception and print the error message
-        #     print(f"An error occurred: {e}")
-        #     output_file.write(f"-1: Error: {e}\n")
-        #     break
+        # exec(line_after_colon)
+        try:
+            exec(line_after_colon)
+        except Exception as e:
+            # This block will catch any exception and print the error message
+            print(f"An error occurred: {e}")
+            output_file.write(f"-1: Error: {e}\n")
+            break
         output_file.write(line_before_colon + ": executed\n")
         output_file.flush()  # Ensure the line is written to the file immediately
     output_file.close()

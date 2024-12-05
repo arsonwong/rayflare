@@ -7,6 +7,7 @@
 
 import numpy as np
 from solcore.state import State
+import pickle
 
 from rayflare.transfer_matrix_method.lookup_table import make_TMM_lookuptable
 from rayflare.structure import Interface, RTgroup, BulkLayer, Roughness
@@ -214,6 +215,10 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             SC[i1] = SC[i1][0][1]
         if len(SC.TMM_lookup_table) < i1+1:
             SC.TMM_lookup_table.append(None)
+
+    # lookup_tables = SC.TMM_lookup_table
+    # with open("lookup_tables.pkl", "wb") as file:
+    #     pickle.dump(lookup_tables, file)
 
     stored_front_redistribution_matrices = []
     stored_rear_redistribution_matrices = []
@@ -481,3 +486,6 @@ def process_structure(SC, options, save_location="default", overwrite=False):
             stored_rear_redistribution_matrices.append(None)
 
     SC.stored_redistribution_matrices = [stored_front_redistribution_matrices, stored_rear_redistribution_matrices]
+    # stored_matrices = SC.stored_redistribution_matrices
+    # with open("stored_matrices.pkl", "wb") as file:
+    #     pickle.dump(stored_matrices, file)

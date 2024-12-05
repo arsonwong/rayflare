@@ -4,6 +4,10 @@ import os
 from rayflare.utilities import get_savepath
 from rayflare.angles import fold_phi, make_angle_vector, overall_bin
 from sparse import COO, save_npz, stack
+import warnings
+
+# Suppress all runtime warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # to do
 # analytical_front_surface - input is a bunch of rays, in optics it's  called initial_ray

@@ -658,13 +658,14 @@ def matrix_multiplication(
                 incident_side = options["incident_side"]
             
             if incident_side==-1:
-                vb_2[-1] = [dot_wl(Tb[-1], v0)]  # pass through rear surface
-                Tfirst = xr.DataArray(
-                    np.array(np.sum(vb_2[-1][0], axis=1)),
-                    name="Tfirst",
+                vb_2[-1] = [dot_wl(Tb[-1], v0)]  # pass through rear surface                                
+                vt[-1].append(dot_wl(Rb[-1], v0))  # reflected from rear surface
+
+                Rfirst = xr.DataArray(
+                    np.array(np.sum(vt[-1][-1], axis=1)),
+                    name="Rfirst",
                 )
-                                
-                vt[-1].append(dot_wl(Rb[-1], v0))  # reflected from front surface
+
                 a[-1].append(
                     dot_wl(Ab[-1], v0)
                 )  # absorbed in front surface at first interaction
@@ -673,13 +674,14 @@ def matrix_multiplication(
                 vf_1[-1] = []
                 vb_2[-1][-1] = dot_wl_u2d(down2up, vb_2[-1][-1])  # outgoing to incoming
             else:
-                vf_1[0] = [dot_wl(Tf[0], v0)]  # pass through front surface
-                Tfirst = xr.DataArray(
-                    np.array(np.sum(vf_1[0][0], axis=1)),
-                    name="Tfirst",
-                )
-                                
+                vf_1[0] = [dot_wl(Tf[0], v0)]  # pass through front surface          
                 vr[0].append(dot_wl(Rf[0], v0))  # reflected from front surface
+
+                Rfirst = xr.DataArray(
+                    np.array(np.sum(vr[0][-1], axis=1)),
+                    name="Rfirst",
+                )
+
                 a[0].append(
                     dot_wl(Af[0], v0)
                 )  # absorbed in front surface at first interaction
@@ -852,45 +854,36 @@ def matrix_multiplication(
             name="R",
         )
 
-        if i2 > 1:
+        A_bulk = xr.DataArray(
+            np.array([np.sum(item, 0) for item in A]),
+            dims=sum_dims,
+            coords=sum_coords,
+            name="A_bulk",
+        )
 
-            A_bulk = xr.DataArray(
-                np.array([np.sum(item, 0) for item in A]),
-                dims=sum_dims,
-                coords=sum_coords,
-                name="A_bulk",
-            )
+        T = xr.DataArray(
+            np.array([np.sum(item, (0, 2)) for item in vt]),
+            dims=sum_dims,
+            coords=sum_coords,
+            name="T",
+        )
 
-            T = xr.DataArray(
-                np.array([np.sum(item, (0, 2)) for item in vt]),
-                dims=sum_dims,
-                coords=sum_coords,
-                name="T",
-            )
+        results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
 
-            results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
+        RAT = xr.merge([R, A_bulk, T, Rfirst])
+        abscos = np.abs(np.cos(thetas))
 
-            RAT = xr.merge([R, A_bulk, T, Tfirst])
-            abscos = np.abs(np.cos(thetas))
+        alphas = []
+        bulk_absorbed_front = []
+        bulk_absorbed_rear = []
+        for i in range(len(bulk_mats)):
+            alphas.append(bulk_mats[i].alpha(options["wavelength"]))
+            absorbed_fraction = 1 - np.exp(-alphas[-1][:,None] * bulk_thick[i] / abscos[None, :])
+            # bulk_absorbed_front.append(total_vf_1[i]-dot_wl(D[i], total_vf_1[i]))
+            # bulk_absorbed_rear.append(total_vb_2[i]-dot_wl(D[i], total_vb_2[i]))
+            bulk_absorbed_front.append(total_vf_1[i]*absorbed_fraction)
+            bulk_absorbed_rear.append(total_vb_2[i]*absorbed_fraction)
 
-            alphas = []
-            bulk_absorbed_front = []
-            bulk_absorbed_rear = []
-            for i in range(len(bulk_mats)):
-                alphas.append(bulk_mats[i].alpha(options["wavelength"]))
-                absorbed_fraction = 1 - np.exp(-alphas[-1][:,None] * bulk_thick[i] / abscos[None, :])
-                # bulk_absorbed_front.append(total_vf_1[i]-dot_wl(D[i], total_vf_1[i]))
-                # bulk_absorbed_rear.append(total_vb_2[i]-dot_wl(D[i], total_vb_2[i]))
-                bulk_absorbed_front.append(total_vf_1[i]*absorbed_fraction)
-                bulk_absorbed_rear.append(total_vb_2[i]*absorbed_fraction)
-
-            grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles, 'bulk_absorbed_front': bulk_absorbed_front, 'bulk_absorbed_rear': bulk_absorbed_rear, 'alphas':alphas, 'abscos': abscos})
-
-        else:
-            assert(1==0)
-            RAT = xr.merge([R, Tfirst])
-            results_per_pass = {"r": vr, "t": vt, "a": a, "A": A}
-
-            grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass})
+        grand_results.append({'RAT':RAT, 'results_per_pass':results_per_pass, 'front_local_angles':front_local_angles, 'rear_local_angles':rear_local_angles, 'bulk_absorbed_front': bulk_absorbed_front, 'bulk_absorbed_rear': bulk_absorbed_rear, 'alphas':alphas, 'abscos': abscos})
 
     return grand_results

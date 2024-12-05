@@ -10,6 +10,7 @@ import xarray as xr
 from sparse import COO, save_npz, stack
 import time
 from joblib import Parallel, delayed
+import pickle
 
 from solcore.absorption_calculator import tmm_core_vec as tmm
 from solcore.absorption_calculator.tmm_core_vec import coh_tmm
@@ -818,6 +819,9 @@ class tmm_structure:
 
         if pol in "sp":
             if coherent:
+                parameters = [pol,n_list,d_list,angles,wavelength]
+                # with open("parameters.pkl", "wb") as file:
+                #     pickle.dump(parameters, file)
                 out = coh_tmm(
                     pol,
                     n_list,
@@ -828,6 +832,9 @@ class tmm_structure:
                     n_list_diff = n_list_diff,
                     detailed = detailed
                 )
+                # with open("out.pkl", "wb") as file:
+                #     pickle.dump(out, file)
+                # assert(1==0)
                 if out['vw_list'] is not None:
                     A_per_layer = tmm.absorp_in_each_layer(out)
                     output["A_per_layer"] = A_per_layer[1:-1]
