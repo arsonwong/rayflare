@@ -5,10 +5,11 @@ import sys
 import pandas as pd
 from copy import deepcopy
 import pickle
-sys.path.insert(0,r"C:\Users\arson\Documents\rayflare_fork")
-# sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# sys.path.insert(1,r"D:\Wavelabs\2023-12-24 mockup of PLQE fit\solcore5_20240324")
-sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
+# sys.path.insert(0,r"C:\Users\arson\Documents\rayflare_fork")
+# sys.path.insert(1,r"C:\Users\arson\Documents\solcore5_fork")
+sys.path.insert(0,os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(1,r"D:\Griddler\010 - Griddler LLP\2022-05-08 projects\2024-12-08 rayflare pyinstaller\solcore5_fork")
+
 
 from solcore.structure import Layer
 from solcore import material
