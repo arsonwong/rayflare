@@ -819,7 +819,7 @@ class tmm_structure:
 
         if pol in "sp":
             if coherent:
-                parameters = [pol,n_list,d_list,angles,wavelength]
+                # parameters = [pol,n_list,d_list,angles,wavelength]
                 # with open("parameters.pkl", "wb") as file:
                 #     pickle.dump(parameters, file)
                 out = coh_tmm(
