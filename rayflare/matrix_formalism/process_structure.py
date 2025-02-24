@@ -323,7 +323,7 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                     if i1 > 0 or side=="rear":
                         options['wavelength'] = light_trapping_wavelength
                         
-                    # only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
+                    only_incidence_angle = determine_only_incidence(side, i1, options['only_incidence_angle'])
                     allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat = TMM(
                         struct.layers,
                         incidence,
@@ -339,7 +339,8 @@ def process_structure(SC, options, save_location="default", overwrite=False):
                         overwrite=overwrite,
                         lookuptable=SC.TMM_lookup_table[i1],
                         width_differentials = struct.width_differentials, 
-                        nk_differentials = struct.nk_parameter_differentials
+                        nk_differentials = struct.nk_parameter_differentials,
+                        only_incidence_angle = only_incidence_angle
                     )
                     if side=="front":
                         stored_front_redistribution_matrices.append([allArrays_backscatter, allArrays_forwardscatter, absArrays, local_angle_mat])

@@ -128,11 +128,33 @@ def RT(
         #         # side gets flipped here
         #         lookuptable = lookuptable.assign_coords(side=np.flip(lookuptable.side))
 
-        theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
+        if "saved_angle_vector" in options:
+            theta_intv = options["saved_angle_vector"][0]
+            phi_intv = options["saved_angle_vector"][1] 
+            angle_vector = options["saved_angle_vector"][2]
+            N_azimuths = options["saved_angle_vector"][3]
+            theta_first_index = options["saved_angle_vector"][4]
+        else:
+            theta_spacing = options.theta_spacing if "theta_spacing" in options else "sin"
 
-        theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index = make_angle_vector(
-            n_theta_bins, phi_sym, c_az, theta_spacing, output_N_azimuths=True
-        )
+            theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index = make_angle_vector(
+                n_theta_bins, phi_sym, c_az, theta_spacing, output_N_azimuths=True
+            )
+
+            if only_incidence_angle:
+                phi_sym = options["phi_symmetry"]
+                theta_in = options["theta_in"]               
+                phi_in = options["phi_in"]
+                binned_theta_in = np.digitize(theta_in, theta_intv, right=True) - 1
+                if theta_in==0:
+                    binned_theta_in = 0
+                unit_distance = phi_sym/N_azimuths[binned_theta_in]
+                phi_ind = phi_in/unit_distance
+                bin_in = theta_first_index[binned_theta_in] + phi_ind.astype(int)
+                angle_vector[bin_in, 1] = theta_in
+                angle_vector[bin_in, 2] = phi_in
+
+            options["saved_angle_vector"] = [theta_intv, phi_intv, angle_vector, N_azimuths, theta_first_index]
 
         if analytical_approx:
             # make the thetas_in, phis_in exactly matching the bins
@@ -301,11 +323,7 @@ def RT(
             n_angles = options["lookuptable_angles"]
             if only_incidence_angle: 
                 theta_in = options["theta_in"]               
-                # if options["theta_in"]==0:
-                #     theta_in = 0.0001
                 phi_in = options["phi_in"]
-                # if options["phi_in"]==0:
-                #     phi_in = 0.0001
                 angle_in = [0,theta_in,phi_in]
                 res = RT_analytical(
                     angle_in,
