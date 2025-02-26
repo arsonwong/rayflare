@@ -359,7 +359,7 @@ def RT(
                 # local_angle_mat = COO.from_numpy(local_angle_mat)
                 allres = []
                 for i1 in range(angles_in.shape[0]):
-                    if i1 == bin_in:
+                    if True: #i1 == bin_in:
                         allres.append(res[:-1])
                     else:
                         allres.append([out_mat_backscatter, out_mat_forwardscatter, A_mat, local_angle_mat])
